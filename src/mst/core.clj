@@ -65,12 +65,12 @@
   (let [hood (generate-hood 100)]
                                         ; lines
     (q/stroke 255 0 0)
-                                        ; should be able to map, but can't
+    (q/stroke-weight 7)
     (loop [tree (map #(concat (hood (first %)) (hood (second %))) (prim hood))]
       (if (not (empty? tree))
         (do
           (show-line (first tree))
-          (recur (rest tree)))))
+          (recur (rest tree)))))        ; should be able to map, but can't
                                         ; points
     (q/stroke 0)
     (q/fill 0)
@@ -81,6 +81,6 @@
           (recur (rest hood)))))))
 
 (q/defsketch example
-  :title "Dots"
+  :title "MST"
   :setup setup
   :size [800 600])
