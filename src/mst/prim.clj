@@ -2,6 +2,19 @@
   (:require [quil.core :as q]
             [clojure.set :as set]))
 
+(defn nn-1 [hood]
+  (loop [current (map list hood (range)) graph #{}]
+    (if (empty? current)
+                                        ; if done, return graph
+      (map vec graph)
+                                        ; otherwise build graph
+      (let [[x y z] (first (first current))
+            i (second (first current))
+            dists (remove #(= (second %) i) (map list (map #(apply q/dist x y z %) hood) (range)))
+            small (* 1.01 (reduce min (map first dists)))
+            edges (map #(hash-set i %) (map second (filter #(<= (first %) small) dists)))]
+        (recur (rest current) (apply conj graph edges))))))
+
 (defn prim [hood]
   (let [n (count hood)
         uncovered (set (range n))
