@@ -5,8 +5,8 @@
   (let [dist (apply q/dist (concat xyz (get tree :xyz)))
         entry (assoc tree :dist dist)
         n (count queue)]
-    (letfn [(dist< [x y] (< (get x :dist) (get y :dist)))]
-      (take n (sort dist< (conj queue entry))))))
+    ;; XXX inefficient way to insert into already-sorted list
+    (take n (sort-by :dist < (conj queue entry)))))
 
 ;; This macro probably does not need to be one, but meh.
 (defmacro kdtree-inner [xyz tree queue stretch this that]
@@ -48,13 +48,13 @@
           :xyz (first (first points))
           :index (second (first points))}
                                         ; if not done
-         (letfn [(P [x] (nth (first x) d))
-                 (P< [x y] (< (P x) (P y)))]
-           (let [points (sort P< points)
+         (letfn [(P [x] (nth (first x) d))]
+           (let [next-d (mod (inc d) ds)
+                 points (sort-by P < points)
                  left (take (/ n 2) points)
                  right (drop (/ n 2) points)
                  split (/ (+ (P (last left)) (P (first right))) 2)]
              {:type :inner
               :d d :split split
-              :left (build left (mod (inc d) ds) ds)
-              :right (build right (mod (inc d) ds) ds)}))))))
+              :left (build left next-d ds)
+              :right (build right next-d ds)}))))))

@@ -1,12 +1,15 @@
 (ns mst.core
   (:require [quil.core :as q]
-            [clojure.set :as set])
-  (:use [mst.prim]
-        [mst.show]))
+            [clojure.set :as set]
+            [mst.kdtree :as kdtree]
+            [mst.graph_theory :as theory])
+  (:use [mst.show])
+  (:gen-class))
 
-(def *state* {:points (atom nil) :mst (atom nil) :nn (atom nil)
-              :projection (atom nil) :filename (atom "")})
-(def *angle* (atom 0))
+(def ^:dynamic *state* {:points (atom nil) :squeezed-points (atom nil)
+                        :mst (atom nil) :nn (atom nil) :kdtree (atom nil)
+                        :projection (atom nil) :filename (atom "")})
+(def ^:dynamic *angle* (atom 0))
 
 (defn load-data
   ([] (load-data "resources/cone.data"))
@@ -34,11 +37,14 @@
                                 (+ (* b (Math/sin @*angle*)) (* c (Math/cos @*angle*)))]
                        [a b c] (vec (map #(+ % 0.5) [a b c]))]
                    [a b]))]
-         (let [mst (prim points)
-               nn (remove (set mst) (nn-1 points))]
-           (reset! (*state* :points) (map squeeze points))
+         (let [kdtree (kdtree/build points)
+               mst (theory/prim points)
+               nn (remove (set mst) (theory/nn-1 points kdtree))]
+           (reset! (*state* :points) points)
+           (reset! (*state* :squeezed-points) (map squeeze points))
            (reset! (*state* :mst) mst)
            (reset! (*state* :nn) nn)
+           (reset! (*state* :kdtree) kdtree)
            (reset! (*state* :projection) projection)
            (reset! (*state* :filename) filename))))))
 
@@ -46,14 +52,14 @@
   (load-data))
 
 (defn setup []
-  (q/frame-rate 7.83)
+  (q/frame-rate 5)
   (q/background 255))
 
 (defn draw []
   (q/background 255)
   (q/stroke-weight 3)
   (swap! *angle* #(mod (+ % 0.01) (* 4 Math/PI)))
-  (let [hood (map @(*state* :projection) @(*state* :points))
+  (let [hood (map @(*state* :projection) @(*state* :squeezed-points))
         mst @(*state* :mst)
         nn @(*state* :nn)]
 
@@ -61,7 +67,7 @@
     (q/stroke 0 0 255)
     (doseq [edge (map #(concat (nth hood (first %)) (nth hood (second %))) nn)]
       (show-line edge))
-    (q/stroke 255 0 0) ; lines
+    (q/stroke 255 0 0)
     (doseq [edge (map #(concat (nth hood (first %)) (nth hood (second %))) mst)]
       (show-line edge))
 
@@ -71,9 +77,10 @@
     (doseq [point hood]
       (show-point point))))
 
-(q/defsketch example
-  :title "MST"
-  :setup setup
-  :draw draw
-  :size [500 500]
-  :renderer :opengl)
+(defn -main []
+  (q/defsketch example
+    :title "MST"
+    :setup setup
+    :draw draw
+    :size [800 800]
+    :renderer :opengl))
