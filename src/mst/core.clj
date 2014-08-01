@@ -1,20 +1,25 @@
 (ns mst.core
-  (:require [quil.core :as q]
-            [clojure.set :as set]
+  (:require [clojure.set :as set]
+            [clojure.java.io :as io]
             [mst.kdtree :as kdtree]
             [mst.graph_theory :as theory])
-  (:use [mst.show])
+  (:use [clojure.tools.nrepl.server :only [start-server stop-server]])
   (:gen-class))
 
 (def ^:dynamic *state* {:points (atom nil) :squeezed-points (atom nil)
                         :mst (atom nil) :nn (atom nil) :kdtree (atom nil)
                         :projection (atom nil) :filename (atom "")})
+
 (def ^:dynamic *angle* (atom 0))
 
 (defn load-data
   ([] (load-data "resources/cone.data"))
   ([filename]
-     (let [points (load-file filename)
+     (let [points (with-open [r (io/reader filename)]
+                    (loop [points (vector) lines (line-seq r)]
+                      (if (empty? lines)
+                        points
+                        (recur (conj points (read-string (first lines))) (rest lines)))))
            xmin (reduce min (map #(nth % 0) points))
            xmax (reduce max (map #(nth % 0) points))
            xrange (- xmax xmin)
@@ -38,8 +43,8 @@
                        [a b c] (vec (map #(+ % 0.5) [a b c]))]
                    [a b]))]
          (let [kdtree (kdtree/build points)
-               mst (theory/prim points)
-               nn (remove (set mst) (theory/nn-1 points kdtree))]
+               nn (theory/nn points kdtree 9 1.05)
+               mst (remove (set nn) (theory/prim points kdtree 9))]
            (reset! (*state* :points) points)
            (reset! (*state* :squeezed-points) (map squeeze points))
            (reset! (*state* :mst) mst)
@@ -51,36 +56,7 @@
 (if (empty? @(*state* :points))
   (load-data))
 
-(defn setup []
-  (q/frame-rate 5)
-  (q/background 255))
-
-(defn draw []
-  (q/background 255)
-  (q/stroke-weight 3)
-  (swap! *angle* #(mod (+ % 0.01) (* 4 Math/PI)))
-  (let [hood (map @(*state* :projection) @(*state* :squeezed-points))
-        mst @(*state* :mst)
-        nn @(*state* :nn)]
-
-    ;; (q/stroke-weight 3) ; lines
-    (q/stroke 0 0 255)
-    (doseq [edge (map #(concat (nth hood (first %)) (nth hood (second %))) nn)]
-      (show-line edge))
-    (q/stroke 255 0 0)
-    (doseq [edge (map #(concat (nth hood (first %)) (nth hood (second %))) mst)]
-      (show-line edge))
-
-    ;; (q/stroke-weight 3) ; points
-    (q/stroke 0)
-    (q/fill 0)
-    (doseq [point hood]
-      (show-point point))))
-
 (defn -main []
-  (q/defsketch example
-    :title "MST"
-    :setup setup
-    :draw draw
-    :size [800 800]
-    :renderer :opengl))
+  (print "Α -")
+  (defonce ^:dynamic *repl-server* (start-server :port 4005))
+  (println " Ω"))
