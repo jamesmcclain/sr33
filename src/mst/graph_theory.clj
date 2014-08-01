@@ -4,51 +4,68 @@
             [mst.kdtree :as kdtree])
   (:use [clojure.data.priority-map]))
 
-(defn nn-1 [points tree k jitter]
-  (loop [points+ (map list points (range)) graph (hash-set)]
-    (if (empty? points+)
-      ;; If done, return the nearest neighbor graph.
-      (map vec graph)
-      ;; Otherwise (continue) build(ing) the graph.
-      (let [xyz (first (first points+))
-            i (second (first points+))
-            [x y z] xyz
-            near (remove #(= (get % :index) i) (kdtree/query xyz tree k))
-            small (* jitter (get (first near ) :dist))
-            near (map :index (filter #(<= (get % :dist) small) near))
-            edges (map #(hash-set i %) near)]
-        (recur (rest points+) (apply conj graph edges))))))
+;; --------------------------------------------------
 
-(defn prim [points tree k]
-  (letfn [(neighbors [xyz i]
-            (map #(hash-set i %) (filter #(< i %) (map :index (kdtree/query xyz tree k)))))
-          (dist [xyz abc]
-            (apply q/dist (concat xyz abc)))
-          (edist [uv]
-            (let [[u v] (vec uv)]
-              (dist (nth points u) (nth points v))))]
-    (let [edges (apply concat (map neighbors points (range)))
-          edges (map first (sort-by second (map list edges (map edist edges))))
-          [u v] (vec (first edges))]
-      ;; The edge (u,v) is the first edge in the length-sorted list.
-      ;; Add that to the minimum spanning tree (3) so u and v are not
-      ;; uncovered (1).  Remove the first edge from the list of edges
-      ;; that are under consideration (2).
-      (loop [uncovered (disj (into (hash-set) (range (count points))) u v) ; 1
-             edges (rest edges) ; 2
-             mst (conj (list) (first edges))] ; 3
-        (let [edges- (filter #(= 1 (count (set/intersection uncovered %))) edges)]
-          (if (or (empty? uncovered) (empty? edges-))
-                                        ; if done, return
-            (map vec mst)
-                                        ; otherwise, add an edge
-            (let [edge (first edges-)
-                  [u v] (vec edge)]
-              ;; The endpoints u and v are now covered (1).  If both
-              ;; endpoints of an edge are already covered, it is not
-              ;; needed any longer (2).  Add the edge (u,v) to the
-              ;; minimum spanning tree (3).
-              (let [uncovered (disj uncovered u v) ; 1
-                    edges (remove #(empty? (set/intersection uncovered %)) edges) ; 2
-                    mst (conj mst edge)] ; 3
-                (recur uncovered edges mst)))))))))
+(defn local-nn [hood jitter]
+  (let [index (:index (first hood))
+        hood (drop 1 hood)
+        radius (* jitter (:dist (first hood)))
+        hood (map :index (filter #(< (:dist %) radius) hood))]
+    (set (map #(hash-set index %) hood))))
+
+(defn nn [points kdtree k jitter]
+  (letfn [(point->hood [xyz] (kdtree/query xyz kdtree k))
+          (hood->edges [hood] (local-nn hood jitter))]
+    (map vec (apply set/union (map (comp hood->edges point->hood) points)))))
+
+;; --------------------------------------------------
+
+(defn local-prim [hood]
+  (letfn [(make-edge [leaf1 leaf2]
+            (let [edge (vector (get leaf1 :index) (get leaf2 :index))
+                  dist (kdtree/dist (:xyz leaf1) (:xyz leaf2))]
+              (vector edge dist)))
+          (make-edges [leaf1 hood]
+            (loop [hood hood edges (list)]
+              (let [leaf2 (first hood)]
+                (if (nil? leaf2)
+                  edges
+                  (recur (rest hood) (conj edges (make-edge leaf1 leaf2)))))))
+          (make-queue []
+            (loop [hood hood edges (list)]
+              (let [leaf (first hood)
+                    hood (rest hood)]
+                (if (or (nil? leaf) (nil? hood))
+                  (into (priority-map) edges)
+                  (recur hood (concat edges (make-edges leaf hood)))))))]
+    (let [Q (make-queue)
+          [u v] (first (first Q))
+          Q (pop Q)]
+      ;; Build the minimum spanning tree by running through the queue
+      ;; until it is exhausted.
+      (loop [covered (hash-set u v)
+             Q Q
+             mst (list #{u v})]
+        ;; Look through the queue until an edge that meets the minimum
+        ;; spanning tree at exactly one vertex is found.
+        (letfn [(find-touching-edge []
+                  (loop [Q Q]
+                    (let [uv (vec (first (first Q)))
+                          [u v] uv]
+                      (cond
+                       ;; The queue is empty or a valid edge has been
+                       ;; found, stop.
+                       (or (or (nil? uv) (nil? u) (nil? v))
+                           (or (and (covered u) (not (covered v)))
+                               (and (not (covered u)) (covered v))))
+                       uv
+                       ;; An invalid edge has been found, continue.
+                       :else (recur (pop Q))))))]
+          (let [[u v] (find-touching-edge)]
+            (if (or (nil? u) (nil? v))
+              (set mst)
+              (recur (conj covered u v) (dissoc Q #{u v}) (conj mst #{u v})))))))))
+
+(defn prim [points kdtree k]
+  (letfn [(point->edges [xyz] (local-prim (kdtree/query xyz kdtree k)))]
+    (map vec (apply set/union (map point->edges points)))))
