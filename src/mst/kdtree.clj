@@ -1,9 +1,12 @@
-(ns mst.kdtree
-  (:require [quil.core :as q]))
+(ns mst.kdtree)
+
+(defn dist [xyz abc]
+  (letfn [(square [x] (* x x))]
+    (Math/sqrt (reduce + (map (comp square -) xyz abc)))))
 
 (defn kdtree-leaf [xyz tree queue]
-  (let [dist (apply q/dist (concat xyz (get tree :xyz)))
-        entry (assoc tree :dist dist)
+  (let [distance (dist xyz (get tree :xyz))
+        entry (assoc tree :dist distance)
         n (count queue)]
     ;; XXX inefficient way to insert into already-sorted list
     (take n (sort-by :dist < (conj queue entry)))))
