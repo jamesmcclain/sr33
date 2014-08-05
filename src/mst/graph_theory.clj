@@ -16,7 +16,7 @@
 (defn nn [points kdtree k jitter]
   (letfn [(point->hood [xyz] (kdtree/query xyz kdtree k))
           (hood->edges [hood] (local-nn hood jitter))]
-    (map vec (apply set/union (map (comp hood->edges point->hood) points)))))
+    (apply set/union (pmap (comp hood->edges point->hood) points))))
 
 ;; --------------------------------------------------
 
@@ -68,4 +68,4 @@
 
 (defn prim [points kdtree k]
   (letfn [(point->edges [xyz] (local-prim (kdtree/query xyz kdtree k)))]
-    (map vec (apply set/union (map point->edges points)))))
+    (apply set/union (pmap point->edges points))))
