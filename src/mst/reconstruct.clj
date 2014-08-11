@@ -1,8 +1,19 @@
 (ns mst.reconstruct
-  (:require [mst.kdtree :as kdtree]
+  (:require [clojure.set :as set]
+            [mst.kdtree :as kdtree]
             [mst.graph_theory :as theory]))
 
-;; Not used, there to facilitate REPL interaction.
+;; --------------------------------------------------
+
+;; Compute the edges in the graph that is the reconstructed surface.
+(defn compute-edges
+  ([points k]
+     (let [kdtree (kdtree/build points)]
+       (compute-edges points kdtree k)))
+  ([points kdtree k]
+     (theory/RNG points kdtree k)))
+
+;; Compute the graph adjacency list.
 (defn compute-adjlist [points edges]
   (letfn [(register-edge [edge adjlist]
             (let [[a b] (vec edge)
@@ -10,19 +21,54 @@
                   b-list (conj (get adjlist b) a)]
               (assoc adjlist a a-list b b-list)))]
     (loop [adjlist (vec (repeat (count points) #{})) edges edges]
-      (let [edge (first edges)
-            edges (rest edges)]
-        (if (empty? edge)
-          adjlist
-          (recur (register-edge edge adjlist) edges))))))
+      (if (empty? edges)
+        adjlist
+        (recur (register-edge (first edges) adjlist) (rest edges))))))
 
-;; Not used, there to facilitate for REPL interaction.
-(defn compute-edges
-  ([points k]
-     (let [kdtree (kdtree/build points)]
-       (compute-edges points kdtree k)))
-  ([points kdtree k]
-     (theory/MST points kdtree k)))
+;; --------------------------------------------------
+
+(defn not-simple? [our-loop]
+  (let [last-index (last our-loop)]
+    (loop [our-loop (drop 1 (drop-last 1 our-loop))]
+      (cond
+       (empty? our-loop) false
+       (= (first our-loop) last-index) true
+       :else (recur (rest our-loop))))))
+
+(defn closed? [our-loop]
+  (= (first our-loop) (last our-loop)))
+
+(defn loops-at-u [hood adjlist u]
+  (loop [stack (vector (vector u)) finished-loops (list)]
+    (println stack)
+    (if (empty? stack)
+      ;; The stack is empty, so return the list of finished loops.
+      finished-loops
+      ;; Work on the loop on top of the stack.
+      (let [current-loop (peek stack)]
+        (cond
+         ;; The loop is not simple, so discard it.
+         (not-simple? current-loop)
+         (do
+           (println " 1:" current-loop)
+           (recur (pop stack) finished-loops))
+         ;; The loop is closed, transfer it to the list.
+         (and (> (count current-loop) 1) (closed? current-loop))
+         (do
+           (println " 2:" current-loop)
+           (recur (pop stack) (conj finished-loops current-loop)))
+         ;; The loop is simple and open, so extend it.
+         :else
+         ;; This sexp returns the new stack:
+         (recur
+          (let [stack (pop stack)
+                ;; The remove is to make sure that the loop contains only indices <= u.
+                neighbors (remove #(< % u) (set/intersection (get adjlist (last current-loop)) hood))]
+            (loop [neighbors neighbors stack stack]
+              (if (empty? neighbors)
+                stack
+                (recur (rest neighbors) (conj stack (conj current-loop (first neighbors)))))))
+          finished-loops))))))
 
 ;; Compute the fan at u.
 (defn local-fan [u adju edges hood]
@@ -71,23 +117,11 @@
 
   ;; Points, kdtree, k
   ([points kdtree k]
-     (reconstruct points kdtree (theory/RNG points kdtree k) k))
+     (reconstruct points kdtree (compute-edges points kdtree k) k))
   
   ;; Points, kdtree, edges, k
   ([points kdtree edges k]
-     (letfn [(register-edge [edge adjlist]
-               (let [[a b] (vec edge)
-                     a-list (conj (get adjlist a) b)
-                     b-list (conj (get adjlist b) a)]
-                 (assoc adjlist a a-list b b-list)))
-             (compute-adjlist []
-               (loop [adjlist (vec (repeat (count points) #{})) edges edges]
-                 (let [edge (first edges)
-                       edges (rest edges)]
-                   (if (empty? edge)
-                     adjlist
-                     (recur (register-edge edge adjlist) edges)))))]
-       (reconstruct points kdtree edges (compute-adjlist) k)))
+     (reconstruct points kdtree edges (compute-adjlist points edges) k))
 
   ;; Points, kdtree, edges, adjacency list, k
   ([points kdtree edges adjlist k]
