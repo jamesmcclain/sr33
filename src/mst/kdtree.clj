@@ -1,9 +1,11 @@
 (ns mst.kdtree)
 
+;; Euclidean distance.
 (defn dist [xyz abc]
   (letfn [(square [x] (* x x))]
     (Math/sqrt (reduce + (map (comp square -) xyz abc)))))
 
+;; Sub-query on a leaf of a KD-tree.
 (defn kdtree-leaf [xyz tree queue]
   (let [distance (dist xyz (get tree :xyz))
         entry (assoc tree :dist distance)
@@ -11,7 +13,8 @@
     ;; XXX inefficient way to insert into already-sorted list
     (take n (sort-by :dist < (conj queue entry)))))
 
-;; This macro probably does not need to be one, but meh.
+;; Sub-query a non-leaf of a KD-tree.  This macro might not need to
+;; be one, but making it one seems to make life marginally easier.
 (defmacro kdtree-inner [xyz tree queue stretch this that]
   `(let [queue# (kdtree-query-aux ~xyz (get ~tree ~this) ~queue)
          worst# (reduce max (map :dist queue#))]
@@ -19,38 +22,43 @@
        queue#
        (kdtree-query-aux ~xyz (get ~tree ~that) queue#))))
 
+;; Recursively query a KD-tree.
 (defn kdtree-query-aux [xyz tree queue]
   (cond
                                         ; leaf
    (= (get tree :type) :leaf) (kdtree-leaf xyz tree queue)
                                         ; inner
    (= (get tree :type) :inner)
+   ;; ``stretch'' is the distance from the worst answer to worst (kth)
+   ;; answer to the query that has been found so far and the boundary
+   ;; of the current split between the left and right sub-trees.
    (let [stretch (- (nth xyz (:d tree)) (:split tree))]
      (if (<= stretch 0)
        (kdtree-inner xyz tree queue (- stretch) :left :right)
        (kdtree-inner xyz tree queue stretch :right :left)))))
 
+;; Query a KD-tree.
 (defn query [xyz tree k]
-  (letfn [(fun-in-the-sun [] {:dist Double/POSITIVE_INFINITY :index -1})]
-    (kdtree-query-aux xyz tree (repeatedly k fun-in-the-sun))))
+  (kdtree-query-aux xyz tree (take k (repeat {:dist Double/POSITIVE_INFINITY :index -1}))))
 
 (defn build
-                                        ; just points
+  ;; Points
   ([points]
      (let [dims (map count points)
            min-dim (reduce min dims)
            max-dim (reduce max dims)]
        (if (= min-dim max-dim)
          (build (map list points (range)) 0 min-dim))))
-                                        ; augmented points and dimensions
+
+  ;; Augmented points, current dimension, number of dimensions
   ([points d ds]
      (let [n (count points)]
        (if (<= n 1)
-                                        ; if done
+         ;; There is one item in this box, it is a leaf.
          {:type :leaf
           :xyz (first (first points))
           :index (second (first points))}
-                                        ; if not done
+         ;; There is more than one item in this box, inner node.
          (letfn [(P [x] (nth (first x) d))]
            (let [next-d (mod (inc d) ds)
                  points (sort-by P < points)
