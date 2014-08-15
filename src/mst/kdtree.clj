@@ -13,8 +13,8 @@
     ;; XXX inefficient way to insert into already-sorted list
     (take n (sort-by :dist < (conj queue entry)))))
 
-;; Sub-query a non-leaf of a KD-tree.  This macro might not need to
-;; be one, but making it one seems to make life marginally easier.
+;; Sub-query a non-leaf of a KD-tree.  This macro might not need to be
+;; a macro.
 (defmacro kdtree-inner [xyz tree queue stretch this that]
   `(let [queue# (kdtree-query-aux ~xyz (get ~tree ~this) ~queue)
          worst# (reduce max (map :dist queue#))]

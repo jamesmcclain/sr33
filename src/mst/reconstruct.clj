@@ -4,6 +4,7 @@
             [mst.graph_theory :as theory]))
 
 (def ^:dynamic *max-cycle-size* 7)
+(def ^:dynamic *max-hole-size* (* 33))
 
 ;; Compute (some of) the edges in the graph that is the reconstructed surface.
 (defn compute-edges [points kdtree k]
@@ -64,18 +65,19 @@
                        (recur i (inc j))))))))]
       (loop [stack (vector (vector u)) finished-loops (list)]
         (if (empty? stack)
-          ;; The stack is empty, so return the list of finished loops.
+                                        ; the stack is empty, so return the list of finished loops
           (filter isometric? (filter canonical? (remove trivial? finished-loops)))
-          ;; Work on the loop on top of the stack.
-          (let [current-loop (peek stack)]
+                                        ; work on the loop on top of the stack
+          (let [current-loop (peek stack)
+                n (count current-loop)]
             (cond
                                         ; discard non-simple loop
              (not-simple? current-loop) (recur (pop stack) finished-loops)
                                         ; triangle is closed, transfer to finished list
-             (and (> (count current-loop) 1) (closed? current-loop))
+             (and (> n 1) (closed? current-loop))
              (recur (pop stack) (conj finished-loops current-loop))
                                         ; loop too long
-             (> (count current-loop) limit) (recur (pop stack) finished-loops)
+             (> n limit) (recur (pop stack) finished-loops)
                                         ; extend the simple, open loop
              :else
              (recur
@@ -97,16 +99,15 @@
 
 
 ;; Add cycles composed of entirely of half-edges to patch holes.
-(declare loops-at-u)
 (defn holes [cycles]
-  (let [boundaries (map cycle-edges cycles) ; edges around each cycle
-        edges (apply concat boundaries) ; all edges
+  (let [edges (mapcat cycle-edges cycles) ; edges around the holes
         freqs (frequencies edges) ; the number of times each edge occurs
         half-edges (filter #(= 1 (get freqs %)) edges) ; all half edges
         half-hood (set (flatten (map seq half-edges))) ; neighborhood holding all half edges
         half-n (reduce max (conj half-hood 0)) ; size of the half-edge neighborhood
-        half-adjlist (compute-adjlist half-n half-edges)]
-    (apply concat (remove empty? (for [u half-hood] (loops-at-u half-adjlist half-hood u Long/MAX_VALUE))))))
+        half-adjlist (compute-adjlist half-n half-edges)
+        half-cycles (for [u half-hood] (loops-at-u half-adjlist half-hood u *max-hole-size*))]
+    (apply concat (remove empty? half-cycles))))
 
 ;; Remove those cycles which can easily be seen to be inside of the
 ;; model and/or non-manifold.
@@ -161,13 +162,13 @@
            adjlist (compute-adjlist (count points) edges)]
        (compute-surface points kdtree edges adjlist k)))
   ([points kdtree edges adjlist k]
-     (let [k (+ (long (Math/sqrt k)) 3)
-           k (* k k)]
+     (let [k (#(* % %) (+ (long (Math/sqrt k)) 3))]
        (letfn [(u-to-fan [u]
                  (let [adju (get adjlist u)
                        hood (set (map :index (kdtree/query (get points u) kdtree k)))]
                    (loops-at-u adjlist hood u *max-cycle-size*)))]
-         (let [cycles (apply concat (pmap u-to-fan (range (count points))))
+         (let [triangulate (partial triangulate-cycle points)
+               cycles (apply concat (pmap u-to-fan (range (count points))))
                surface-cycles (manifold cycles)
                hole-cycles (holes surface-cycles)]
-           (concat hole-cycles surface-cycles))))))
+           (mapcat triangulate (concat hole-cycles surface-cycles)))))))
