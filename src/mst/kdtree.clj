@@ -54,11 +54,11 @@
   ([points d ds]
      (let [n (count points)]
        (if (<= n 1)
-         ;; There is one item in this box, it is a leaf.
+                                        ; a leaf
          {:type :leaf
           :xyz (first (first points))
           :index (second (first points))}
-         ;; There is more than one item in this box, inner node.
+                                        ; an inner node
          (letfn [(P [x] (nth (first x) d))]
            (let [next-d (mod (inc d) ds)
                  points (sort-by P < points)

@@ -1,6 +1,5 @@
 (ns mst.core
-  (:require [clojure.set :as set]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [mst.reconstruct :as recon]
             [mst.kdtree :as kdtree]
             [mst.graph_theory :as theory]
