@@ -1,7 +1,8 @@
 (ns mst.file
   (:require [clojure.set :as set]
             [clojure.java.io :as io]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [mst.reconstruct :as recon]))
 
 ;; Squeeze the points down to fit into the box [-1,1]^3.
 (defn boxify [points]
@@ -52,27 +53,22 @@
 ;; Write a Wavefront OBJ format file.
 (defn save-obj [points surface filename]
   (binding [*out* (java.io.FileWriter. filename)]
-    (letfn [(triangle? [face] (= 3 (count face)))
-            (quad? [face] (= 4 (count face)))
-            (bump [face] (map inc face))
-            (print-triangle [face]
-              (let [a (nth face 0)
-                    u (nth face 1)
-                    b (nth face 2)]
-                (println "f" a u b)))
-            (print-quad [face]
-              (let [a (nth face 0)
-                    u (nth face 1)
-                    b (nth face 2)
-                    v (nth face 3)]
-                (println "f" a u b)
-                (println "f" a v b)))]
+    (letfn [(print-point [point]
+              (let [x (nth point 0)
+                    y (nth point 1)
+                    z (nth point 2)]
+                (println "v" x y z)))
+            (print-face [face]
+              (let [a (inc (nth face 0))
+                    b (inc (nth face 1))
+                    c (inc (nth face 2))]
+                (println "f" a b c)))]
       (doseq [point points]
-        (println "v" (nth point 0) (nth point 1) (nth point 2)))
-      (doseq [face (map bump surface)]
-        (cond
-         (triangle? face) (print-triangle face)
-         (quad? face) (print-quad face))))))
+        (print-point point))
+      (doseq [cycle surface]
+        (println "#" cycle)
+        (doseq [face (recon/triangulate-cycle points cycle)]
+          (print-face face))))))
 
 (defn dotty [edges hood filename]
   (binding [*out* (java.io.FileWriter. filename)]
