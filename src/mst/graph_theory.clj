@@ -17,37 +17,36 @@
 
 ;; Relative Neighborhood Graph.
 (defn RNG [points kdtree k]
-  (let [distance (partial distance points)]
-    (letfn [(check-edge [^Long p ^Long q ^Double drq hood]
-              ;; For all r, see if d(r,p) < d(p,q) and d(r,q) < d(p,q).
-              ;; If either is true, then the edge (p,q) is not a member
-              ;; of the RNG.
-              (loop [hood (disj hood p q)]
-                (if (not (empty? hood))
+  (letfn [(check-edge [^Long p ^Long q ^Double drq hood]
+            ;; For all r, see if d(r,p) < d(p,q) and d(r,q) < d(p,q).
+            ;; If either is true, then the edge (p,q) is not a member
+            ;; of the RNG.
+            (loop [hood (disj hood p q)]
+              (if (not (empty? hood))
                                         ; not done checking, so check
-                  (let [^Long r (first hood)]
-                    (if (and (< (distance p r) drq)
-                             (< (distance q r) drq))
+                (let [^Long r (first hood)]
+                  (if (and (< (distance points p r) drq)
+                           (< (distance points q r) drq))
                                         ; failed this test
-                      nil
+                    nil
                                         ; passed this one test
-                      (recur (rest hood))))
+                    (recur (rest hood))))
                                         ; done checking, passed all of the tests
-                  #{p q})))
-            ;; report all RNG edges (u,v) where u < v for some given u
-            (at-u [u]
-              (let [hood (set (map :index (kdtree/query (nth points u) kdtree k)))
-                    candidates (set (filter #(< u %) hood))]
+                #{p q})))
+          ;; Report all RNG edges (u,v) where u < v for some given u.
+          (at-u [u]
+            (let [hood (set (map :index (kdtree/query (nth points u) kdtree k)))
+                  candidates (set (filter #(< u %) hood))]
                                         ; for every v near u where u < v
-                (loop [candidates candidates edges (list)]
-                  (if (not (empty? candidates))
+              (loop [candidates candidates edges (list)]
+                (if (not (empty? candidates))
                                         ; check to see if (u,v) is in the RNG
-                    (let [v (first candidates)
-                          d (distance u v)]
-                      (recur (disj candidates v) (conj edges (check-edge u v d (disj hood u v)))))
+                  (let [v (first candidates)
+                        d (distance points u v)]
+                    (recur (disj candidates v) (conj edges (check-edge u v d (disj hood u v)))))
                                         ; return the found edges
-                    (remove nil? edges)))))]
-      (set (apply concat (pmap at-u (range (count points))))))))
+                  (remove nil? edges)))))]
+    (set (mapcat identity (pmap at-u (range (count points)))))))
 
 ;; CLRS page 595.
 (defn Dijkstra [adjlist hood s]
