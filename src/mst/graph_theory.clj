@@ -3,50 +3,44 @@
             [mst.kdtree :as kdtree])
   (:use [clojure.data.priority-map]))
 
-(defn distance ^Double [points ^Long u ^Long v]
-  (letfn [(sq ^Double [^Double x] (* x x))]
+(defn distance ^double [points ^long u ^long v]
+  (letfn [(sq ^double [^double x] (* x x))]
     (let [abc (nth points u)
-          ^Double a (nth abc 0)
-          ^Double b (nth abc 1)
-          ^Double c (nth abc 2)
+          ^double a (nth abc 0)
+          ^double b (nth abc 1)
+          ^double c (nth abc 2)
           xyz (nth points v)
-          ^Double x (nth xyz 0)
-          ^Double y (nth xyz 1)
-          ^Double z (nth xyz 2)]
+          ^double x (nth xyz 0)
+          ^double y (nth xyz 1)
+          ^double z (nth xyz 2)]
       (+ (sq (- a x)) (sq (- b y)) (sq (- c z))))))
 
 ;; Relative Neighborhood Graph.
-(defn RNG [points kdtree k]
-  (letfn [(check-edge [^Long p ^Long q ^Double drq hood]
+(defn RNG [points index-set kdtree fudge k]
+  (letfn [(RNG-edge? [^long p ^long q ^double drq hood]
             ;; For all r, see if d(r,p) < d(p,q) and d(r,q) < d(p,q).
             ;; If either is true, then the edge (p,q) is not a member
             ;; of the RNG.
-            (loop [hood (disj hood p q)]
+            (loop [hood hood]
               (if (not (empty? hood))
                                         ; not done checking, so check
-                (let [^Long r (first hood)]
-                  (if (and (< (distance points p r) drq)
-                           (< (distance points q r) drq))
+                (let [^long r (first hood)]
+                  (if (and (< (* fudge (distance points p r)) drq)
+                           (< (* fudge (distance points q r)) drq))
                                         ; failed this test
-                    nil
+                    false
                                         ; passed this one test
                     (recur (rest hood))))
                                         ; done checking, passed all of the tests
-                #{p q})))
-          ;; Report all RNG edges (u,v) where u < v for some given u.
-          (at-u [u]
-            (let [hood (set (map :index (kdtree/query (nth points u) kdtree k)))
-                  candidates (set (filter #(< u %) hood))]
-                                        ; for every v near u where u < v
-              (loop [candidates candidates edges (list)]
-                (if (not (empty? candidates))
-                                        ; check to see if (u,v) is in the RNG
-                  (let [v (first candidates)
-                        d (distance points u v)]
-                    (recur (disj candidates v) (conj edges (check-edge u v d (disj hood u v)))))
-                                        ; return the found edges
-                  (remove nil? edges)))))]
-    (set (mapcat identity (pmap at-u (range (count points)))))))
+                true)))
+          (RNG-edges-at-u [u]
+            (let [near-u (set (map :index (kdtree/query (nth points u) kdtree k)))
+                  hood (set/intersection index-set near-u)]
+              ;; XXX make sure that hood is correct (don't remove v <= u).
+              (for [v hood :when
+                    (and (< u v) (RNG-edge? u v (distance points u v) (disj hood u v)))]
+                #{u v})))]
+    (disj (set (mapcat identity (pmap RNG-edges-at-u index-set))) nil)))
 
 ;; CLRS page 595.
 (defn Dijkstra [adjlist hood s]

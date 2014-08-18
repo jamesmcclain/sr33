@@ -48,7 +48,7 @@
            min-dim (reduce min dims)
            max-dim (reduce max dims)]
        (if (= min-dim max-dim)
-         (build (map list points (range)) 0 min-dim))))
+         (build (map #(list %1 (long %2)) points (range)) 0 min-dim))))
 
   ;; Augmented points, current dimension, number of dimensions
   ([points d ds]
