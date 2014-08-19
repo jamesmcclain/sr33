@@ -5,6 +5,7 @@
             [mst.graph_theory :as theory]))
 
 (def ^:dynamic *max-cycle-size* 7)
+(def ^:dynamic *reconstruct-retries* 7)
 (def ^:dynamic *Δr* 3)
 
 ;; Compute the graph adjacency list.
@@ -166,26 +167,26 @@
 ;; sample conditions hold).
 (defn compute-surface
   ([points k]
-     (compute-surface points k 7))
+     (compute-surface points k *reconstruct-retries*))
   ([points k countdown]
      (let [kdtree (kdtree/build points)
            n (count points)
-           k (radius-bump k)]
+           r (radius-bump k)]
        (loop [surface (list) ; surface to be incrementally built up
               index-set (set (range n)) ; the set of indices of vertices to work on
-              epsilon 0.0 ; how much to fudge the relative neighborhood graph
-              limit *max-cycle-size* ; the maximum size of any face boundary
+              epsilon 0.0 ; how much to fudge the relative neighborhood graph (initially)
+              limit *max-cycle-size* ; the maximum size of any face boundary (initially)
               countdown countdown]
          (println "|Γ| ="(count index-set) "\t|γ| =" limit "\tϵ =" epsilon )
          (let [edges (theory/RNG points index-set kdtree (+ 1.0 epsilon) k)
                adjlist (compute-adjlist (count points) edges)]
            (letfn [(compute-cycles [u]
-                     (let [u-set (set (map :index (kdtree/query (get points u) kdtree k)))
+                     (let [u-set (set (map :index (kdtree/query (get points u) kdtree r)))
                            hood (set/intersection u-set index-set)]
-                       (cycles-at-u adjlist hood u limit)))]
+                       (cycles-at-u adjlist hood u (long limit))))]
              (let [patch (mapcat identity (pmap compute-cycles index-set))
                    surface (manifold (concat surface patch))
                    index-set (problem-points index-set surface)]
                (if (and (not (empty? index-set)) (> countdown 0))
-                 (recur surface index-set (+ epsilon 0.05) (inc limit) (dec countdown))
+                 (recur surface index-set (+ epsilon (/ 1 limit)) limit (dec countdown))
                  (mapcat identity (pmap #(triangulate-cycle points %) surface))))))))))
