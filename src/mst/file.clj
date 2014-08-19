@@ -7,48 +7,35 @@
 ;; Squeeze the points down to fit into the box [-1,1]^3.
 (defn boxify [points]
   (letfn [(column [n ps] (map #(nth % n) ps))]
-    (let [mins (list
-                (reduce min (column 0 points))
-                (reduce min (column 1 points))
-                (reduce min (column 2 points)))
-          maxs (list
-                (reduce max (column 0 points))
-                (reduce max (column 1 points))
-                (reduce max (column 2 points)))
-          all-min (reduce min mins)
-          all-max (reduce max maxs)
-          half (/ (- all-max all-min) 2)
-          points (map #(map - % (repeat all-min)) points)
-          points (map #(map / % (repeat half)) points)
+    (let [m (reduce min (flatten points))
+          M (reduce max (flatten points))
+          middle (/ (- M m) 2)
+          points (map #(map - % (repeat m)) points)
+          points (map #(map / % (repeat middle)) points)
           points (map #(map - % (repeat 1)) points)]
-      (vec (map vec points)))))
+      (vec (map #(apply vector-of :double %) points)))))
 
 ;; Load an "OFF" format file.
 (defn load-off [filename]
-  (with-open [r (io/reader filename)]
-    (let [lines (line-seq r)
-          off? (boolean (re-find #"^OFF$" (nth lines 0)))
-          n (Long/parseLong (first (string/split (nth lines 1) #"\s+")))]
-      (loop [points (vector) lines (take n (drop 2 lines))]
-        (if (empty? lines)
-          points
-          (let [point (vec (map #(Double/parseDouble %) (string/split (first lines) #"\s+")))]
-            (recur (conj points point) (rest lines))))))))
+    (with-open [r (io/reader filename)]
+      (letfn [(vertex? [line] (= 3 (count (string/split line #"\s+"))))
+              (get-vertex [vertex] (map #(Double/parseDouble %) (string/split vertex #"\s+")))]
+        (loop [lines (drop 2 (line-seq r)) vertices (list)]
+          (cond
+           (empty? lines) (boxify vertices)
+           (vertex? (first lines)) (recur (rest lines) (conj vertices (get-vertex (first lines))))
+           :else (recur (rest lines) vertices))))))
 
 ;; Load a Wavefront OBJ format file.
 (defn load-obj [filename]
-  (with-open [r (io/reader filename)]
-    (letfn [(vertex? [line] (re-find #"^v\s" line))
-            (vertex-string [v] (take 3 (drop 1 (string/split v #"\s+"))))
-            (numerical-vertex [vs] (vec (map #(Double/parseDouble %) vs)))
-            (line-to-point [vertex-line] (numerical-vertex (vertex-string vertex-line)))]
-      (loop [points (vector) lines (line-seq r)]
-        (if (empty? lines)
-          points
-          (let [line (first lines)]
-            (if (vertex? line)
-              (recur (conj points (line-to-point line)) (rest lines))
-              (recur points (rest lines)))))))))
+    (with-open [r (io/reader filename)]
+      (letfn [(vertex? [line] (re-find #"^v\s" line))
+              (get-vertex [vertex] (map #(Double/parseDouble %) (drop 1 (string/split vertex #"\s+"))))]
+        (loop [lines (line-seq r) vertices (list)]
+          (cond
+           (empty? lines) (boxify vertices)
+           (vertex? (first lines)) (recur (rest lines) (conj vertices (get-vertex (first lines))))
+           :else (recur (rest lines) vertices))))))
 
 ;; Write a Wavefront OBJ format file.
 (defn save-obj [points surface filename]
@@ -65,11 +52,36 @@
                 (println "f" a b c)))]
       (doseq [point points]
         (print-point point))
-      (doseq [cycle surface]
-        (println "#" cycle)
-        (doseq [face (recon/triangulate-cycle points cycle)]
-          (print-face face))))))
+      (doseq [face surface]
+        (print-face face)))))
 
+(defn save-povray [points surface name filename]
+  (binding [*out* (java.io.FileWriter. filename)]
+    (letfn [(print-point [point]
+              (let [x (nth point 0)
+                    y (nth point 1)
+                    z (nth point 2)]
+                (println ", <" x "," y "," z ">")))
+            (print-face [face]
+              (let [a (nth face 0)
+                    b (nth face 1)
+                    c (nth face 2)]
+                (println ", <" a "," b "," c ">")))]
+      (println "#declare" name "= mesh2 {")
+
+      (println "vertex_vectors {" (count points))
+      (doseq [point points]
+        (print-point point))
+      (println "}")
+
+      (println "face_indices {" (count surface))
+      (doseq [face surface]
+        (print-face face))
+      (println "}")
+
+      (println "}"))))
+
+;; Write a neighborhood in DOT format.
 (defn dotty [edges hood filename]
   (binding [*out* (java.io.FileWriter. filename)]
     (letfn [(in-hood? [edge] (set/subset? edge hood))]
