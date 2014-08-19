@@ -46,7 +46,8 @@
                     z (nth point 2)]
                 (println "v" x y z)))
             (print-face [face]
-              (let [a (inc (nth face 0))
+              (let [face (seq face)
+                    a (inc (nth face 0))
                     b (inc (nth face 1))
                     c (inc (nth face 2))]
                 (println "f" a b c)))]
@@ -63,7 +64,8 @@
                     z (nth point 2)]
                 (println ", <" x "," y "," z ">")))
             (print-face [face]
-              (let [a (nth face 0)
+              (let [face (seq face)
+                    a (nth face 0)
                     b (nth face 1)
                     c (nth face 2)]
                 (println ", <" a "," b "," c ">")))]

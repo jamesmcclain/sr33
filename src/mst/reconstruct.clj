@@ -4,13 +4,12 @@
             [mst.kdtree :as kdtree]
             [mst.graph_theory :as theory]))
 
-(def ^:dynamic *max-cycle-size* 7)
-(def ^:dynamic *reconstruct-retries* 7)
 (def ^:dynamic *Δr* 3)
+(def ^:dynamic *max-cycle-size* 7)
+(def ^:dynamic *max-hole-size* 21)
 
-;; Compute the graph adjacency list.
-(defn compute-adjlist [n edges]
-  (letfn [(register-edge [edge adjlist]
+(defn- compute-adjlist [n edges]
+  (letfn [(add-edge [edge adjlist]
             (let [[a b] (vec edge)
                   a-list (conj (get adjlist a) b)
                   b-list (conj (get adjlist b) a)]
@@ -18,7 +17,7 @@
     (loop [adjlist (vec (repeat n #{})) edges edges]
       (if (empty? edges)
         adjlist
-        (recur (register-edge (first edges) adjlist) (rest edges))))))
+        (recur (add-edge (first edges) adjlist) (rest edges))))))
 
 (defn- not-simple? ^Boolean [cycle]
   (let [last-index (last cycle)]
@@ -35,15 +34,14 @@
   (< (count cycle) 4))
 
 (defn- canonical? ^Boolean [cycle]
-  (let [n (count cycle)
-        ^long a (nth cycle 1)
-        ^long b (nth cycle (- n 2))]
+  (let [^long a (nth cycle 1)
+        ^long b (nth cycle (- (count cycle) 2))]
     (< a b)))
 
 ;; Generate a list of unique, non-trivial cycles.  In order to avoid
 ;; duplicates from other local lists, only cycles where all of the
 ;; indices are smaller than u are allowed.
-(defn- cycles-at-u [adjlist hood u limit]
+(defn- cycles-at-u [adjlist hood limit u]
   (let [Dijkstra (memo/fifo (partial theory/Dijkstra adjlist hood))]
     (letfn [(isometric? ^Boolean [cycle]
               (let [n (dec (count cycle))
@@ -55,9 +53,8 @@
                    :else
                    (let [s (nth cycle i)
                          t (nth cycle j)
-                         [s t] [(min s t) (max s t)]
                          dist-cycle (min (- j i) (+ (- i j) n))
-                         dist-graph (get (Dijkstra s) t)]
+                         dist-graph (get (Dijkstra (min s t)) (max s t))]
                      (if (< dist-graph dist-cycle)
                        false
                        (recur i (inc j))))))))]
@@ -100,13 +97,15 @@
 (defn- manifold [cycles]
   (let [boundaries (pmap cycle-edges cycles)
         cycles+ (map list cycles boundaries)
-        edge-counts (frequencies (mapcat identity boundaries))]
+        edge-counts (frequencies (apply concat boundaries))]
     (loop [inbox cycles+ outbox (list) edge-counts edge-counts]
       (if (empty? inbox)
         outbox
         (let [[cycle boundary] (first inbox)]
-          (if (some #(< (get edge-counts %) 3) boundary)
+          (if (and (some #(< (get edge-counts %) 3) boundary))
+                                        ; keep the face
             (recur (rest inbox) (conj outbox cycle) edge-counts)
+                                        ; remove the face
             (recur (rest inbox) outbox
                    (merge-with - edge-counts (into {} (map #(vector % 1) boundary))))))))))
 
@@ -115,7 +114,10 @@
 (defn- triangulate-cycle [points cycle]
   (if (= 4 (count cycle))
                                         ; triangle, report it
-    (list cycle)
+    (let [a (nth cycle 0)
+          b (nth cycle 1)
+          c (nth cycle 2)]
+      (hash-set (hash-set a b c)))
                                         ; non-triangle, split it
     (let [n (dec (count cycle))
           dist-cycle (fn [i j]
@@ -148,45 +150,59 @@
             [i j] (map second uv)
             cycle-1 (apply vector-of :long (concat (take (+ 1 i) cycle) (drop j cycle)))
             cycle-2 (apply vector-of :long (concat (drop i (take (+ 1 j) cycle)) (list (nth cycle i))))]
-        (concat
+        (set/union
          (triangulate-cycle points cycle-1)
          (triangulate-cycle points cycle-2))))))
 
 (defn- problem-points [index-set surface]
   (let [whacky-edges (map first (filter #(= 1 (second %)) (frequencies (mapcat cycle-edges surface))))
-        whacky-points (set (mapcat identity whacky-edges))
+        whacky-points (set (apply concat whacky-edges))
         unused-points (set/difference index-set (set (flatten surface)))]
     (set/union whacky-points unused-points)))
 
-(defn- radius-bump [k]
+(defn- bump-radius [k]
   (let [r (+ (Math/sqrt k) *Δr*)]
     (long (* r r))))
 
 ;; Recover a surface from an organized collection of point samples by
 ;; computing a subset of the Delaunay Triangulation (assuming the
-;; sample conditions hold).
-(defn compute-surface
-  ([points k]
-     (compute-surface points k *reconstruct-retries*))
-  ([points k countdown]
-     (let [kdtree (kdtree/build points)
-           n (count points)
-           r (radius-bump k)]
-       (loop [surface (list) ; surface to be incrementally built up
-              index-set (set (range n)) ; the set of indices of vertices to work on
-              epsilon 0.0 ; how much to fudge the relative neighborhood graph (initially)
-              limit *max-cycle-size* ; the maximum size of any face boundary (initially)
-              countdown countdown]
-         (println "|Γ| ="(count index-set) "\t|γ| =" limit "\tϵ =" epsilon )
-         (let [edges (theory/RNG points index-set kdtree (+ 1.0 epsilon) k)
-               adjlist (compute-adjlist (count points) edges)]
-           (letfn [(compute-cycles [u]
-                     (let [u-set (set (map :index (kdtree/query (get points u) kdtree r)))
-                           hood (set/intersection u-set index-set)]
-                       (cycles-at-u adjlist hood u (long limit))))]
-             (let [patch (mapcat identity (pmap compute-cycles index-set))
-                   surface (manifold (concat surface patch))
-                   index-set (problem-points index-set surface)]
-               (if (and (not (empty? index-set)) (> countdown 0))
-                 (recur surface index-set (+ epsilon (/ 1 limit)) limit (dec countdown))
-                 (mapcat identity (pmap #(triangulate-cycle points %) surface))))))))))
+;; sample conditions hold) then triangulating the resulting cycles.
+(defn compute-surface [points k tries]
+  (let [kdtree (kdtree/build points)
+        n (count points)
+        r (bump-radius k)
+        k-hood-of (fn [u] (set (map :index (kdtree/query (nth points u) kdtree k))))
+        r-hood-of (fn [u] (set (map :index (kdtree/query (nth points u) kdtree r))))
+        fudge (Math/pow (Math/sqrt 2.001) (/ 1 tries))]
+    (loop [old-surface (list)
+           old-graph (list)
+           index-set (set (range n))
+           epsilon 1.0
+           limit *max-cycle-size*
+           countdown tries]
+      (println (java.util.Date.) "\t|Γ| ="(count index-set) "\tϵ =" epsilon)
+      (let [index-hood 
+            (if (= n (count index-set))
+              index-set
+              (set (apply concat (pmap r-hood-of index-set))))
+            graph (concat (theory/RNG points index-hood k-hood-of epsilon) old-graph)
+            adjlist (compute-adjlist n graph)
+            get-cycles (fn [u] (cycles-at-u adjlist (r-hood-of u) (long limit) u))
+            salvagable (remove #(index-hood (first %)) old-surface) ; salvage as much as possible
+            patch (apply concat (pmap get-cycles index-hood)) ; (re)compute the non-salvagable part
+            surface (manifold (concat salvagable patch)) ; extract a new surface
+            new-index-set (problem-points index-set surface)]
+        (if (and (not (empty? new-index-set)) (> countdown 1))
+          (recur surface graph new-index-set (* epsilon fudge) (+ limit (/ 3 tries)) (dec countdown))
+          (do
+            (println (java.util.Date.) "△")
+            (let [surface (apply set/union (pmap #(triangulate-cycle points %) surface))]
+              (println (java.util.Date.) "○")
+              (let [edge-counts (frequencies (apply concat (pmap cycle-edges surface)))
+                    half-edges (map first (remove #(= 2 (second %)) edge-counts))
+                    half-adjlist (compute-adjlist n half-edges)
+                    new-index-hood (set (apply concat (pmap r-hood-of new-index-set)))
+                    get-holes (fn [u] (cycles-at-u half-adjlist new-index-hood *max-hole-size* u))
+                    holes (apply concat (pmap get-holes new-index-set))]
+                (println (java.util.Date.) "holes found: " (count holes))
+                (set/union surface (apply set/union (pmap #(triangulate-cycle points %) holes)))))))))))

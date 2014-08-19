@@ -10,7 +10,7 @@
   (let [distance (dist xyz (get tree :xyz))
         entry (assoc tree :dist distance)
         n (count queue)]
-    ;; XXX inefficient way to insert into already-sorted list
+    ;; XXX probably inefficient way to insert into already-sorted list
     (take n (sort-by :dist < (conj queue entry)))))
 
 ;; Sub-query a non-leaf of a KD-tree.  This macro might not need to be
