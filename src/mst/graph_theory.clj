@@ -14,26 +14,28 @@
           ^double x (nth xyz 0)
           ^double y (nth xyz 1)
           ^double z (nth xyz 2)]
-      (+ (sq (- a x)) (sq (- b y)) (sq (- c z))))))
+      (+ (sq (- a x)) (+ (sq (- b y)) (sq (- c z)))))))
 
 ;; Relative Neighborhood Graph.  For all r, see if d(p,r) < d(p,q) and
 ;; d(r,q) < d(p,q).  If both are true, then the edge (p,q) is not a
 ;; member of the RNG, otherwise it is.
 (defn RNG [points index-set neighborhood-of epsilon]
-  (let [distance (partial distance points)
-        candidates (for [p index-set q (remove #(<= p %) (neighborhood-of p))] (list p q))]
-    (letfn [(check [[p q]]
+  (let [distance (partial distance points)]
+    (letfn [(edge? [p q]
               (let [dpq (/ (distance p q) epsilon)]
                 (loop [R (set/union (neighborhood-of p) (neighborhood-of q))]
                   (cond
                                         ; done
-                   (empty? R) #{p q}
+                   (empty? R) true
                                         ; failed
                    (and (< (distance p (first R)) dpq)
                         (< (distance (first R) q) dpq))
-                   nil
-                   :else (recur (rest R))))))]
-      (remove nil? (pmap check candidates)))))
+                   false
+                   :else (recur (rest R))))))
+            (edges-at-p [p]
+              (for [q (remove #(<= p %) (neighborhood-of p)) :when (edge? p q)]
+                #{p q}))]
+      (apply concat (pmap edges-at-p index-set)))))
 
 ;; CLRS page 595.
 (defn Dijkstra [adjlist hood s]

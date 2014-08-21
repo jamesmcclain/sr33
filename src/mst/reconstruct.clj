@@ -8,7 +8,7 @@
 (def ^:dynamic *max-cycle-size* 7)
 (def ^:dynamic *max-hole-size* 21)
 
-(defn- compute-adjlist [n edges]
+(defn- compute-adjlist [^long n edges]
   (letfn [(add-edge [edge adjlist]
             (let [[a b] (vec edge)
                   a-list (conj (get adjlist a) b)
@@ -24,11 +24,11 @@
     (loop [cycle (drop 1 (drop-last 1 cycle))]
       (cond
        (empty? cycle) false
-       (= (first cycle) last-index) true
+       (== (first cycle) last-index) true
        :else (recur (rest cycle))))))
 
 (defn- closed? ^Boolean [cycle]
-  (= (first cycle) (last cycle)))
+  (== (first cycle) (last cycle)))
 
 (defn- trivial? ^Boolean [cycle]
   (< (count cycle) 4))
@@ -41,7 +41,7 @@
 ;; Generate a list of unique, non-trivial cycles.  In order to avoid
 ;; duplicates from other local lists, only cycles where all of the
 ;; indices are smaller than u are allowed.
-(defn- cycles-at-u [adjlist hood limit u]
+(defn- cycles-at-u [adjlist hood limit ^long u]
   (let [Dijkstra (memo/fifo (partial theory/Dijkstra adjlist hood))]
     (letfn [(isometric? ^Boolean [cycle]
               (let [n (dec (count cycle))
@@ -92,41 +92,40 @@
       edges
       (recur (rest cycle) (conj edges #{(first cycle) (second cycle)})))))
 
+(defn- triangle-edges [triangle]
+  (let [triangle (seq triangle)
+        ^double a (nth triangle 0)
+        ^double b (nth triangle 1)
+        ^double c (nth triangle 2)]
+    (list #{a b} #{b c} #{c a})))
+
 ;; Remove those cycles which can easily be seen to be inside of the
 ;; model and/or non-manifold.
 (defn- manifold [cycles]
   (let [boundaries (pmap cycle-edges cycles)
         cycles+ (map list cycles boundaries)
-        edge-counts (frequencies (apply concat boundaries))]
-    (loop [inbox cycles+ outbox (list) edge-counts edge-counts]
-      (if (empty? inbox)
-        outbox
-        (let [[cycle boundary] (first inbox)]
-          (if (and (some #(< (get edge-counts %) 3) boundary))
-                                        ; keep the face
-            (recur (rest inbox) (conj outbox cycle) edge-counts)
-                                        ; remove the face
-            (recur (rest inbox) outbox
-                   (merge-with - edge-counts (into {} (map #(vector % 1) boundary))))))))))
+        edge-counts (frequencies (apply concat boundaries))
+        inner-cycle? (fn [[cycle boundary]] (every? #(> (get edge-counts %) 2) boundary))]
+    (map first (remove inner-cycle? cycles+))))
 
 ;; Triangulate a (non-triangular) cycle by connecting the nearest pair
 ;; that is not already connected.
 (defn- triangulate-cycle [points cycle]
-  (if (= 4 (count cycle))
+  (if (== 4 (count cycle))
                                         ; triangle, report it
-    (let [a (nth cycle 0)
-          b (nth cycle 1)
-          c (nth cycle 2)]
+    (let [^long a (nth cycle 0)
+          ^long b (nth cycle 1)
+          ^long c (nth cycle 2)]
       (hash-set (hash-set a b c)))
                                         ; non-triangle, split it
     (let [n (dec (count cycle))
           dist-cycle (fn [i j]
-                       (let [i (second i)
-                             j (second j)]
+                       (let [^long i (second i)
+                             ^long j (second j)]
                          (min (- j i) (+ (- i j) n))))
           dist-euclidean (fn [u v]
-                           (let [u (first u)
-                                 v (first v)]
+                           (let [^long u (first u)
+                                 ^long v (first v)]
                              (theory/distance points u v)))]
       (let [cycle+ (map list cycle (range))
             uv
@@ -147,20 +146,25 @@
                       (recur U (rest V) (list u v) (dist-euclidean u v))
                                         ; edge not better, increment j
                       :else (recur U (rest V) best best-dist)))))
-            [i j] (map second uv)
+            ;; [i j] (map second uv)
+            ^long i (second (first uv))
+            ^long j (second (second uv))
             cycle-1 (apply vector-of :long (concat (take (+ 1 i) cycle) (drop j cycle)))
             cycle-2 (apply vector-of :long (concat (drop i (take (+ 1 j) cycle)) (list (nth cycle i))))]
         (set/union
          (triangulate-cycle points cycle-1)
          (triangulate-cycle points cycle-2))))))
 
+;; Return a set of points in whose vicinity the surface should be
+;; re-reconstructed.
 (defn- problem-points [index-set surface]
-  (let [whacky-edges (map first (filter #(= 1 (second %)) (frequencies (mapcat cycle-edges surface))))
+  (let [whacky-edges (map first (filter #(== 1 (second %)) (frequencies (mapcat cycle-edges surface))))
         whacky-points (set (apply concat whacky-edges))
         unused-points (set/difference index-set (set (flatten surface)))]
     (set/union whacky-points unused-points)))
 
-(defn- bump-radius [k]
+;; bump the area of a neighborhood.
+(defn- bump-radius ^long [k]
   (let [r (+ (Math/sqrt k) *Δr*)]
     (long (* r r))))
 
@@ -182,15 +186,15 @@
            countdown tries]
       (println (java.util.Date.) "\t|Γ| ="(count index-set) "\tϵ =" epsilon)
       (let [index-hood 
-            (if (= n (count index-set))
+            (if (== n (count index-set))
               index-set
               (set (apply concat (pmap r-hood-of index-set))))
             graph (concat (theory/RNG points index-hood k-hood-of epsilon) old-graph)
             adjlist (compute-adjlist n graph)
             get-cycles (fn [u] (cycles-at-u adjlist (r-hood-of u) (long limit) u))
-            salvagable (remove #(index-hood (first %)) old-surface) ; salvage as much as possible
-            patch (apply concat (pmap get-cycles index-hood)) ; (re)compute the non-salvagable part
-            surface (manifold (concat salvagable patch)) ; extract a new surface
+            salvageable (remove #(index-hood (first %)) old-surface) ; salvage as much as possible
+            patch (apply concat (pmap get-cycles index-hood)) ; (re)compute the non-salvageable part
+            surface (manifold (concat salvageable patch)) ; extract a new surface
             new-index-set (problem-points index-set surface)]
         (if (and (not (empty? new-index-set)) (> countdown 1))
           (recur surface graph new-index-set (* epsilon fudge) (+ limit (/ 3 tries)) (dec countdown))
@@ -198,11 +202,11 @@
             (println (java.util.Date.) "△")
             (let [surface (apply set/union (pmap #(triangulate-cycle points %) surface))]
               (println (java.util.Date.) "○")
-              (let [edge-counts (frequencies (apply concat (pmap cycle-edges surface)))
-                    half-edges (map first (remove #(= 2 (second %)) edge-counts))
+              (let [edge-counts (frequencies (apply concat (pmap triangle-edges surface)))
+                    half-edges (map first (filter #(== 1 (second %)) edge-counts))
                     half-adjlist (compute-adjlist n half-edges)
-                    new-index-hood (set (apply concat (pmap r-hood-of new-index-set)))
-                    get-holes (fn [u] (cycles-at-u half-adjlist new-index-hood *max-hole-size* u))
-                    holes (apply concat (pmap get-holes new-index-set))]
+                    half-index-set (set (flatten (map seq half-edges)))
+                    get-holes (fn [u] (cycles-at-u half-adjlist half-index-set *max-hole-size* u))
+                    holes (apply concat (pmap get-holes half-index-set))]
                 (println (java.util.Date.) "holes found: " (count holes))
                 (set/union surface (apply set/union (pmap #(triangulate-cycle points %) holes)))))))))))
