@@ -7,12 +7,17 @@
 ;; Squeeze the points down to fit into the box [-1,1]^3.
 (defn boxify [points]
   (letfn [(column [n ps] (map #(nth % n) ps))]
-    (let [m (reduce min (flatten points))
-          M (reduce max (flatten points))
-          middle (/ (- M m) 2)
-          points (map #(map - % (repeat m)) points)
-          points (map #(map / % (repeat middle)) points)
-          points (map #(map - % (repeat 1)) points)]
+    (let [x (reduce min (column 0 points))
+          X (reduce max (column 0 points))
+          y (reduce min (column 1 points))
+          Y (reduce max (column 1 points))
+          z (reduce min (column 2 points))
+          Z (reduce max (column 2 points))
+          medians  (map (comp #(/ % 2) -) [X Y Z] [x y z])
+          median (reduce max medians)
+          points (map #(map - % [x y z]) points)
+          points (map #(map - % medians) points)
+          points (map #(map / % (repeat 3 median)) points)]
       (vec (map #(apply vector-of :double %) points)))))
 
 ;; Load an "OFF" format file.
