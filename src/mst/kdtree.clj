@@ -1,14 +1,17 @@
 (ns mst.kdtree)
 
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
 ;; Euclidean distance.
-(defn dist [xyz abc]
+(defn- distance [xyz abc]
   (letfn [(square [x] (* x x))]
     (Math/sqrt (reduce + (map (comp square -) xyz abc)))))
 
 ;; Sub-query on a leaf of a KD-tree.
-(defn kdtree-leaf [xyz tree queue]
-  (let [distance (dist xyz (get tree :xyz))
-        entry (assoc tree :dist distance)
+(defn- kdtree-leaf [xyz tree queue]
+  (let [dist (distance xyz (get tree :xyz))
+        entry (assoc tree :dist dist)
         n (count queue)]
     ;; XXX probably inefficient way to insert into already-sorted list
     (take n (sort-by :dist < (conj queue entry)))))
@@ -23,7 +26,7 @@
        (kdtree-query-aux ~xyz (get ~tree ~that) queue#))))
 
 ;; Recursively query a KD-tree.
-(defn kdtree-query-aux [xyz tree queue]
+(defn- kdtree-query-aux [xyz tree queue]
   (cond
                                         ; leaf
    (= (get tree :type) :leaf) (kdtree-leaf xyz tree queue)
@@ -49,7 +52,6 @@
            max-dim (reduce max dims)]
        (if (= min-dim max-dim)
          (build (map #(list %1 (long %2)) points (range)) 0 min-dim))))
-
   ;; Augmented points, current dimension, number of dimensions
   ([points d ds]
      (let [n (count points)]

@@ -4,6 +4,9 @@
             [mst.kdtree :as kdtree])
   (:use [clojure.data.priority-map]))
 
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
 (defn distance ^double [points ^long u ^long v]
   (letfn [(sq ^double [^double x] (* x x))]
     (let [abc (nth points u)
@@ -39,23 +42,26 @@
 
 ;; CLRS page 595.
 (defn Dijkstra [adjlist hood s]
-  (loop [Q (priority-map s 0) dist (hash-map s 0)]
-    (let [[^Long u ^Long udist] (peek Q)
-          ^Long udist+1 (if (not (nil? udist)) (+ udist 1) Long/MAX_VALUE)]
+  (loop [Q (priority-map s 0) dist (hash-map s 0) pi (hash-map s -1)]
+    (let [[u udist] (peek Q)
+          u (if (nil? u) -1 u)
+          udist (if (nil? udist) (dec Long/MAX_VALUE) udist)
+          udist+1 (+ udist 1)]
       (cond
-                                        ; t is unreachable from s
-       (or (empty? Q) (nil? u) (nil? udist)) dist
+                                        ; done searching, function returns [dist pi]
+       (empty? Q) [dist pi]
                                         ; update Q and dist
        :else
-       (let [[Q dist]
-             (loop [Adju (filter hood (get adjlist u)) Q (pop Q) dist dist]
-               (let [^Long v (first Adju)
-                     ^Long vdist (get dist v Long/MAX_VALUE)]
+       (let [[Q dist pi]
+             (loop [Adju (filter hood (get adjlist u)) Q (pop Q) dist dist pi pi]
+               (let [v (first Adju)
+                     vdist (get dist v Long/MAX_VALUE)]
                  (cond
                                         ; all neighbors checked, done
-                  (or (empty? Adju) (nil? v) (nil? vdist)) [Q dist]
+                  (or (empty? Adju) (nil? v) (nil? vdist)) [Q dist pi]
                                         ; relax
-                  (> vdist udist+1) (recur (rest Adju) (assoc Q v udist+1) (assoc dist v udist+1))
+                  (> vdist udist+1)
+                  (recur (rest Adju) (assoc Q v udist+1) (assoc dist v udist+1) (assoc pi v u))
                                         ; next neighbor
-                  :else (recur (rest Adju) Q dist))))]
-         (recur Q dist))))))
+                  :else (recur (rest Adju) Q dist pi))))]
+         (recur Q dist pi))))))

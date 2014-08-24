@@ -5,10 +5,11 @@
             [mst.graph_theory :as theory]))
 
 (def ^:dynamic *Δr* 3)
-(def ^:dynamic *max-cycle-size* 7)
-(def ^:dynamic *max-hole-size* 21)
 
-(defn- compute-adjlist [^long n edges]
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
+
+(defn- compute-adjlist [n edges]
   (letfn [(add-edge [edge adjlist]
             (let [[a b] (vec edge)
                   a-list (conj (get adjlist a) b)
@@ -19,71 +20,43 @@
         adjlist
         (recur (add-edge (first edges) adjlist) (rest edges))))))
 
-(defn- not-simple? ^Boolean [cycle]
-  (let [last-index (last cycle)]
-    (loop [cycle (drop 1 (drop-last 1 cycle))]
-      (cond
-       (empty? cycle) false
-       (== (first cycle) last-index) true
-       :else (recur (rest cycle))))))
-
-(defn- closed? ^Boolean [cycle]
-  (== (first cycle) (last cycle)))
-
-(defn- trivial? ^Boolean [cycle]
-  (< (count cycle) 4))
-
-(defn- canonical? ^Boolean [cycle]
-  (let [^long a (nth cycle 1)
-        ^long b (nth cycle (- (count cycle) 2))]
-    (< a b)))
-
-;; Generate a list of unique, non-trivial cycles.  In order to avoid
-;; duplicates from other local lists, only cycles where all of the
-;; indices are smaller than u are allowed.
-(defn- cycles-at-u [adjlist hood limit ^long u]
-  (let [Dijkstra (memo/fifo (partial theory/Dijkstra adjlist hood))]
-    (letfn [(isometric? ^Boolean [cycle]
+;; Generate a list of unique, non-trivial cycles that meet the point
+;; with index u.  In order to avoid duplicates from other local lists,
+;; only cycles where all of the indices are smaller than u are
+;; allowed.
+(defn- cycles-at-u [adjlist hood u]
+  (let [compute-dist (memo/fifo (fn [s] (first (theory/Dijkstra adjlist hood s))))
+        eligible (set (filter #(< % u) hood)) ; strange asymmetry in performance between < and >
+        compute-pi (memo/fifo (fn [s] (second (theory/Dijkstra adjlist eligible s))))]
+    (letfn [(trace-path [a b pi]
+              (loop [current b path (list)]
+                (cond
+                 (== current a) (conj path current)
+                 (== current -1) nil
+                 :else (recur (get pi current -1) (conj path current)))))
+            (isometric? ^Boolean [cycle]
               (let [n (dec (count cycle))
                     n-1 (dec n)]
                 (loop [i 0 j 1]
                   (cond
-                   (> i n-1) true
-                   (> j n-1) (recur (+ i 1) (+ i 2))
-                   :else
+                   (> i n-1) true ; no shortcuts found
+                   (> j n-1) (recur (+ i 1) (+ i 2)) ; next iteration of i
+                   :else ; check for shortcut
                    (let [s (nth cycle i)
                          t (nth cycle j)
                          dist-cycle (min (- j i) (+ (- i j) n))
-                         dist-graph (get (Dijkstra (min s t)) (max s t))]
+                         dist-graph (get (compute-dist (min s t)) (max s t))]
                      (if (< dist-graph dist-cycle)
                        false
                        (recur i (inc j))))))))]
-      (loop [stack (vector (vector-of :long u)) finished-cycles (list)]
-        (if (empty? stack)
-                                        ; the stack is empty, so return the list of finished cycles
-          (filter isometric? (filter canonical? (remove trivial? finished-cycles)))
-                                        ; otherwise, work on the cycles on top of the stack
-          (let [current-cycle (peek stack)
-                n (count current-cycle)]
-            (cond
-                                        ; discard non-simple cycle
-             (not-simple? current-cycle) (recur (pop stack) finished-cycles)
-                                        ; the cycle is closed, transfer to finished list
-             (and (> n 1) (closed? current-cycle))
-             (recur (pop stack) (conj finished-cycles current-cycle))
-                                        ; cycle too long
-             (> n limit) (recur (pop stack) finished-cycles)
-                                        ; extend the simple, open path
-             :else
-             (recur
-                                        ; this sexp returns the new stack:
-              (let [stack (pop stack)
-                    neighbors (remove #(< % u) (filter hood (get adjlist (last current-cycle))))]
-                (loop [neighbors neighbors stack stack]
-                  (if (empty? neighbors)
-                    stack
-                    (recur (rest neighbors) (conj stack (conj current-cycle (first neighbors)))))))
-              finished-cycles))))))))
+      (let [neighbors (set/intersection eligible (get adjlist u))
+            candidate-cycles
+            (for [a neighbors b neighbors :when (< a b)] ; enforcing a < b ensures only one copy of each cycle
+              (let [pi (compute-pi a)
+                    path (trace-path a b pi)]
+                (if (not (nil? path))
+                  (concat (list u) path (list u)))))]
+        (filter isometric? (remove nil? candidate-cycles))))))
 
 ;; Return the set of edges which bound the cycle.
 (defn- cycle-edges [cycle]
@@ -143,7 +116,7 @@
                       (and
                        (> (dist-cycle u v) 1)
                        (< (dist-euclidean u v) best-dist))
-                      (recur U (rest V) (list u v) (dist-euclidean u v))
+                      (recur U (rest V) (list u v) (double (dist-euclidean u v)))
                                         ; edge not better, increment j
                       :else (recur U (rest V) best best-dist)))))
             ;; [i j] (map second uv)
@@ -171,7 +144,7 @@
 ;; Recover a surface from an organized collection of point samples by
 ;; computing a subset of the Delaunay Triangulation (assuming the
 ;; sample conditions hold) then triangulating the resulting cycles.
-(defn compute-surface [points k tries]
+(defn compute-surface [points k tries hole-limit]
   (let [kdtree (kdtree/build points)
         n (count points)
         r (bump-radius k)
@@ -182,7 +155,6 @@
            old-graph (list)
            index-set (set (range n))
            epsilon 1.0
-           limit *max-cycle-size*
            countdown tries]
       (println (java.util.Date.) "\t|Γ| ="(count index-set) "\tϵ =" epsilon)
       (let [index-hood 
@@ -191,22 +163,25 @@
               (set (apply concat (pmap r-hood-of index-set))))
             graph (concat (theory/RNG points index-hood k-hood-of epsilon) old-graph)
             adjlist (compute-adjlist n graph)
-            get-cycles (fn [u] (cycles-at-u adjlist (r-hood-of u) (long limit) u))
+            compute-cycles (fn [u] (cycles-at-u adjlist (r-hood-of u) u))
             salvageable (remove #(index-hood (first %)) old-surface) ; salvage as much as possible
-            patch (apply concat (pmap get-cycles index-hood)) ; (re)compute the non-salvageable part
+            patch (apply concat (pmap compute-cycles index-hood)) ; (re)compute the non-salvageable part
             surface (manifold (concat salvageable patch)) ; extract a new surface
             new-index-set (problem-points index-set surface)]
         (if (and (not (empty? new-index-set)) (> countdown 1))
-          (recur surface graph new-index-set (* epsilon fudge) (+ limit (/ 3 tries)) (dec countdown))
+          (recur surface graph new-index-set (* epsilon fudge) (dec countdown))
           (do
             (println (java.util.Date.) "△")
             (let [surface (apply set/union (pmap #(triangulate-cycle points %) surface))]
-              (println (java.util.Date.) "○")
-              (let [edge-counts (frequencies (apply concat (pmap triangle-edges surface)))
-                    half-edges (map first (filter #(== 1 (second %)) edge-counts))
-                    half-adjlist (compute-adjlist n half-edges)
-                    half-index-set (set (flatten (map seq half-edges)))
-                    get-holes (fn [u] (cycles-at-u half-adjlist half-index-set *max-hole-size* u))
-                    holes (apply concat (pmap get-holes half-index-set))]
-                (println (java.util.Date.) "holes found: " (count holes))
-                (set/union surface (apply set/union (pmap #(triangulate-cycle points %) holes)))))))))))
+              (if (> hole-limit 0)
+                (do
+                  (println (java.util.Date.) "○")
+                  (let [edge-counts (frequencies (apply concat (pmap triangle-edges surface)))
+                        half-edges (map first (filter #(== 1 (second %)) edge-counts))
+                        half-adjlist (compute-adjlist n half-edges)
+                        half-index-set (set (flatten (map seq half-edges)))
+                        get-holes (fn [u] (cycles-at-u half-adjlist half-index-set u))
+                        holes (filter #(<= (count %) hole-limit) (apply concat (pmap get-holes half-index-set)))]
+                    (println (java.util.Date.) "holes found: " (count holes))
+                    (set/union surface (apply set/union (pmap #(triangulate-cycle points %) holes)))))
+                surface))))))))

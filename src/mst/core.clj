@@ -22,16 +22,16 @@
       (.close clip))
     (catch Exception ex)))
 
-(defn reconstruct [filename k retries & bell]
+(defn reconstruct [filename k tries hole-limit & bell]
   (let [points
         (cond
          (re-find #"\.obj$" filename) (file/load-obj filename)
          (re-find #"\.off$" filename) (file/load-off filename)
          :else (throw (Exception. "?")))
-        surface (time (recon/compute-surface points k retries))]
+        surface (time (recon/compute-surface points k tries hole-limit))]
     (grade/grade-surface surface)
-    (file/save-obj points surface (str filename ".recon." k "." retries ".obj"))
-    (file/save-povray points surface "reconstruction" (str filename ".recon." k "." retries ".inc"))
+    (file/save-obj points surface (str filename ".recon." k "." tries ".obj"))
+    (file/save-povray points surface "reconstruction" (str filename ".recon." k "." tries ".inc"))
     (if (not (empty? bell)) (finished))))
 
 (defn mumbo []
