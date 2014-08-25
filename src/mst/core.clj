@@ -18,7 +18,7 @@
       (.open clip sound)
       (.setFramePosition clip 0)
       (.start clip)
-      (Thread/sleep 2000)
+      (Thread/sleep 2100)
       (.close clip))
     (catch Exception ex)))
 

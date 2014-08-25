@@ -36,8 +36,7 @@
                    false
                    :else (recur (rest R))))))
             (edges-at-p [p]
-              (for [q (remove #(<= p %) (neighborhood-of p)) :when (edge? p q)]
-                #{p q}))]
+              (for [q (neighborhood-of p) :when (and (> q p) (edge? p q))] #{p q}))]
       (apply concat (pmap edges-at-p index-set)))))
 
 ;; CLRS page 595.

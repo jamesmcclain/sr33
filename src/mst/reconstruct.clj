@@ -1,6 +1,7 @@
 (ns mst.reconstruct
   (:require [clojure.set :as set]
             [clojure.core.memoize :as memo]
+            [clojure.core.reducers :as r]
             [mst.kdtree :as kdtree]
             [mst.graph_theory :as theory]))
 
@@ -72,12 +73,17 @@
         ^double c (nth triangle 2)]
     (list #{a b} #{b c} #{c a})))
 
+(defn- staple
+  ([] {})
+  ([a b] (merge-with + a b)))
+
 ;; Remove those cycles which can easily be seen to be inside of the
 ;; model and/or non-manifold.
 (defn- manifold [cycles]
   (let [boundaries (pmap cycle-edges cycles)
         cycles+ (map list cycles boundaries)
-        edge-counts (frequencies (apply concat boundaries))
+        ;; edge-counts (frequencies (apply concat boundaries))
+        edge-counts (r/fold staple (r/map frequencies boundaries))
         inner-cycle? (fn [[cycle boundary]] (every? #(> (get edge-counts %) 2) boundary))]
     (map first (remove inner-cycle? cycles+))))
 
@@ -148,8 +154,12 @@
   (let [kdtree (kdtree/build points)
         n (count points)
         r (bump-radius k)
-        k-hood-of (fn [u] (set (map :index (kdtree/query (nth points u) kdtree k))))
-        r-hood-of (fn [u] (set (map :index (kdtree/query (nth points u) kdtree r))))
+        k-hood-of (memo/fifo
+                   (fn [u] (set (map :index (kdtree/query (nth points u) kdtree k))))
+                   :fifo/threshold n)
+        r-hood-of (memo/fifo
+                   (fn [u] (set (map :index (kdtree/query (nth points u) kdtree r))))
+                   :fifo/threshold n)
         fudge (Math/pow (Math/sqrt 2.001) (/ 1 tries))]
     (loop [old-surface (list)
            old-graph (list)
