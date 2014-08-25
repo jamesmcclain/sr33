@@ -1,6 +1,10 @@
 # mst
 
 This is a library and program for reconstructing surfaces from organized collections of point samples (such as those produced by a laser range-scanner).
+The ideas represented by this program and presented in the accompanying
+[article](http://daystrom-data-concepts.com/SR/)
+are well-developed (in my view), but the implementation itself is still in the prototype stage.
+See the "Caveats and Bugs" section for more on this.
 
 ## Goals
 
@@ -14,15 +18,10 @@ This goal can even be achieved in the case of undersampled surfaces where the la
 Consider the two images below.
 The first image is of a surface reconstructed from 456 vertices.
 For comparison, a reconstruction of the same surface from 7088 samples is shown.
-Being able to function in the presence of undersampling is important because all surfaces can be considered to be understampled near sharp features (from the point of view of the sample conditions for most reconstruction algorithms).
+Being able to function in the presence of undersampling is important because all surfaces can be considered to be understampled near sharp features (from the point of view of the sample conditions of most reconstruction algorithms).
 
 ![Alt cutcube.obj (small)](http://daystrom-data-concepts.com/SR/images/480/cutcube-small.png)
 ![Alt cutcube.obj (large)](http://daystrom-data-concepts.com/SR/images/480/cutcube-large.png)
-
-The ideas represented by this program and presented in the accompanying
-[article](http://daystrom-data-concepts.com/SR/)
-are well-developed (in my view), but the implementation itself is still in the prototype stage.
-See the "Caveats and Bugs" section for more on this.
 
 ## Usage
 
@@ -32,7 +31,7 @@ From within a REPL session, type:
      $ (reconstruct "/tmp/Foot.obj" 9 3 33)
 
 to navigate into the main project namespace and reconstruct the Wavefront `.OBJ` formatted file `/tmp/Foot.obj` (taking the vertices and ignoring any faces that may be in the file).
-The reconstruction is done with a *neighborhood size* of 9, with a maximum of 3 *attempts* to reconstruct the surface, and with a maximum fillable-hole size of 33.
+The reconstruction is done with a *neighborhood size* of 9, with a maximum of 3 *attempts* to reconstruct the surface, and with a *maximum fillable-hole size* of 33.
 
 The meaning of the neighborhood size parameter is explained in the
 [article](http://daystrom-data-concepts.com/SR/)
@@ -56,7 +55,7 @@ Type:
 from within the `mst.core` namespace to reconstruct the `OFF` formatted file `/tmp/Caesar.off`.
 
 The result of this function call is two files: `/tmp/Caesar.off.recon.9.3.obj` and `/tmp/Caesar.off.recon.9.3.inc`.
-The first file is an `.OBJ` file that contains the reconstruction.
+The first file contains the reconstruction in Wavefront `.OBJ` format.
 The second file contains a
 [POV-Ray](http://www.povray.org/)
 `mesh2` suitable for use with that program.
@@ -75,7 +74,7 @@ The `core/reconstruct` function does the entire process, but the individual step
 
 Even though hole-filling is done as a final step before completing the reconstruction process, the occasional hole is still present in the output.
 Hole-filling is done by finding half-edges in the reconstruction (after all of the retries have been done), looking for isometric cycles of half-edges (the program's definition of "holes"), then triangulating those cycles.
-This method fails in the presence of a collection of edges which bound a hole (now using the word in the normal sense) but which are not all half-edges, as for example when "overlapping triangles" are produced.
+This method fails in the presence of a collection of edges which bound a "hole" (now using the word in the normal sense) but which are not all half-edges, as for example when "overlapping triangles" are produced.
 That problem can be managed heuristically, but I have hesitated to address it because I would like to keep this prototype code simple and would also like to think of a nicer way to handle this issue.
 
 ![Alt hole](http://daystrom-data-concepts.com/SR/images/hole.png)
