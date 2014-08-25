@@ -8,7 +8,21 @@
   (:use [clojure.tools.nrepl.server :only [start-server stop-server]])
   (:gen-class))
 
-(defn reconstruct [filename k retries]
+(defn finished []
+  (try
+    (let [loader (.getContextClassLoader (Thread/currentThread))
+          stream (.getResourceAsStream loader "HOTPOCKETS-TAG.aiff")
+          bufstream (java.io.BufferedInputStream. stream)
+          sound (javax.sound.sampled.AudioSystem/getAudioInputStream bufstream)
+          clip (javax.sound.sampled.AudioSystem/getClip)]
+      (.open clip sound)
+      (.setFramePosition clip 0)
+      (.start clip)
+      (Thread/sleep 2000)
+      (.close clip))
+    (catch Exception ex)))
+
+(defn reconstruct [filename k retries & bell]
   (let [points
         (cond
          (re-find #"\.obj$" filename) (file/load-obj filename)
@@ -18,7 +32,7 @@
     (grade/grade-surface surface)
     (file/save-obj points surface (str filename ".recon." k "." retries ".obj"))
     (file/save-povray points surface "reconstruction" (str filename ".recon." k "." retries ".inc"))
-    (finished)))
+    (if (not (empty? bell)) (finished))))
 
 (defn mumbo []
   (println "
