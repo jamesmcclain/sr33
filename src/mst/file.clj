@@ -1,4 +1,5 @@
-(ns mst.file
+(ns ^{:author "James McClain <jwm@daystrom-data-concepts.com>"}
+  mst.file
   (:require [clojure.set :as set]
             [clojure.java.io :as io]
             [clojure.string :as string]

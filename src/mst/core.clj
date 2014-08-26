@@ -1,4 +1,5 @@
-(ns mst.core
+(ns ^{:author "James McClain <jwm@daystrom-data-concepts.com>"}
+  mst.core
   (:require [clojure.java.io :as io]
             [mst.reconstruct :as recon]
             [mst.kdtree :as kdtree]
@@ -22,16 +23,16 @@
       (.close clip))
     (catch Exception ex)))
 
-(defn reconstruct [filename k tries hole-limit & bell]
+(defn reconstruct [filename k hole-limit & bell]
   (let [points
         (cond
          (re-find #"\.obj$" filename) (file/load-obj filename)
          (re-find #"\.off$" filename) (file/load-off filename)
          :else (throw (Exception. "?")))
-        surface (time (recon/compute-surface points k tries hole-limit))]
+        surface (time (recon/compute-surface points k hole-limit))]
     (grade/grade-surface surface)
-    (file/save-obj points surface (str filename ".recon." k "." tries ".obj"))
-    (file/save-povray points surface "reconstruction" (str filename ".recon." k "." tries ".inc"))
+    (file/save-obj points surface (str filename ".recon." k ".obj"))
+    (file/save-povray points surface "reconstruction" (str filename ".recon." k ".inc"))
     (if (not (empty? bell)) (finished))))
 
 (defn mumbo []

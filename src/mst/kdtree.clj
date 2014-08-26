@@ -1,4 +1,4 @@
-(ns mst.kdtree)
+(ns ^{:author "James McClain <jwm@daystrom-data-concepts.com>"} mst.kdtree)
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* true)

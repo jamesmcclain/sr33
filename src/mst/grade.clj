@@ -1,4 +1,5 @@
-(ns mst.grade
+(ns ^{:author "James McClain <jwm@daystrom-data-concepts.com>"}
+  mst.grade
   (:require [clojure.set]
             [clojure.java.io :as io]
             [clojure.string :as string]))
