@@ -2,6 +2,7 @@
   mst.graph_theory
   (:require [clojure.set :as set]
             [clojure.core.memoize :as memo]
+            [clojure.core.reducers :as r]
             [mst.kdtree :as kdtree])
   (:use [clojure.data.priority-map]))
 
@@ -23,7 +24,7 @@
 ;; Relative Neighborhood Graph.  For all r, see if d(p,r) < d(p,q) and
 ;; d(r,q) < d(p,q).  If both are true, then the edge (p,q) is not a
 ;; member of the RNG, otherwise it is.
-(defn RNG [points index-set neighborhood-of]
+(defn RNG [points n neighborhood-of]
   (let [distance (partial distance points)]
     (letfn [(edge? [p q]
               (let [dpq (distance p q)]
@@ -36,7 +37,7 @@
                    :else (recur (rest R))))))
             (edges-at-p [p]
               (for [q (neighborhood-of p) :when (and (> q p) (edge? p q))] #{p q}))]
-      (apply concat (pmap edges-at-p index-set)))))
+      (r/foldcat (r/mapcat edges-at-p (into [] (range n)))))))
 
 ;; CLRS page 595.
 (defn Dijkstra [adjlist hood s]
