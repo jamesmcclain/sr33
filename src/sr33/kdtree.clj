@@ -6,7 +6,7 @@
 
 ;; Euclidean distance.
 (defn- distance [xyz abc]
-  (letfn [(square [x] (* x x))]
+  (letfn [(square [^double x] (double (* x x)))]
     (Math/sqrt (reduce + (map (comp square -) xyz abc)))))
 
 ;; Sub-query on a leaf of a KD-tree.
@@ -21,7 +21,7 @@
 ;; a macro.
 (defmacro kdtree-inner [xyz tree queue stretch this that]
   `(let [queue# (kdtree-query-aux ~xyz (get ~tree ~this) ~queue)
-         worst# (reduce max (map :dist queue#))]
+         worst# (double (reduce max (map :dist queue#)))]
      (if (<= worst# ~stretch)
        queue#
        (kdtree-query-aux ~xyz (get ~tree ~that) queue#))))
@@ -36,7 +36,7 @@
    ;; ``stretch'' is the distance from the worst answer to worst (kth)
    ;; answer to the query that has been found so far and the boundary
    ;; of the current split between the left and right sub-trees.
-   (let [stretch (- (nth xyz (:d tree)) (:split tree))]
+   (let [stretch (- (double (nth xyz (:d tree))) (double (:split tree)))]
      (if (<= stretch 0)
        (kdtree-inner xyz tree queue (- stretch) :left :right)
        (kdtree-inner xyz tree queue stretch :right :left)))))
@@ -51,10 +51,10 @@
      (let [dims (map count points)
            min-dim (reduce min dims)
            max-dim (reduce max dims)]
-       (if (= min-dim max-dim)
-         (build (map #(list %1 (long %2)) points (range)) 0 min-dim))))
+       (if (= min-dim max-dim) ; if all points have the same number of coordinates
+         (build (map #(list %1 (long %2)) points (range)) 0 min-dim)))) ; give each point an index and build tree
   ;; Augmented points, current dimension, number of dimensions
-  ([points d ds]
+  ([points ^long d ^long ds] ; d is the current dimension, ds is the number of dimensions
      (let [n (count points)]
        (if (<= n 1)
                                         ; a leaf
@@ -62,12 +62,12 @@
           :xyz (first (first points))
           :index (second (first points))}
                                         ; an inner node
-         (letfn [(P [x] (nth (first x) d))]
+         (letfn [(P [x] (nth (first x) d))] ; P is a projection
            (let [next-d (mod (inc d) ds)
                  points (sort-by P < points)
                  left (take (/ n 2) points)
                  right (drop (/ n 2) points)
-                 split (/ (+ (P (last left)) (P (first right))) 2)]
+                 split (/ (+ (double (P (last left))) (double (P (first right)))) 2.0)]
              {:type :inner
               :d d :split split
               :left (build left next-d ds)

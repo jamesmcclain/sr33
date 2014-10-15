@@ -36,13 +36,13 @@
   (let [hood (or hood (set (keys metric)))
         extra (set extra)
         compute-dist (memo/fifo (fn [s] (first (theory/Dijkstra metric hood s))))
-        eligible (set (filter #(< % u) hood))
+        eligible (set (filter #(< (long %) (long u)) hood))
         compute-pi (memo/fifo (fn [s] (second (theory/Dijkstra graph eligible s))))]
     (letfn [(trace-path [a b pi] ; trace a path from a to be using the previous set pi
               (loop [current b path (list)]
                 (cond
-                 (== current a) (conj path current)
-                 (== current -1) nil
+                 (== (long current) (long a)) (conj path current)
+                 (== (long current) -1) nil
                  :else (recur (get pi current -1) (conj path current)))))
             (isometric? [cycle] ; determine if cycle is isometric
               (let [n (dec (count cycle))
@@ -52,16 +52,16 @@
                    (> i n-1) true ; no shortcuts found
                    (> j n-1) (recur (+ i 1) (+ i 2)) ; next iteration of i
                    :else ; check for shortcut
-                   (let [s (nth cycle i)
-                         t (nth cycle j)
-                         dist-cycle (min (- j i) (+ (- i j) n))
-                         dist-metric (get (compute-dist (min s t)) (max s t))]
+                   (let [s (long (nth cycle i))
+                         t (long (nth cycle j))
+                         dist-cycle (long (min (- j i) (+ (- i j) n)))
+                         dist-metric (long (get (compute-dist (min s t)) (max s t)))]
                      (if (< dist-metric dist-cycle)
                        false ; not isometric
                        (recur i (inc j))))))))]
       (let [neighbors (set/intersection eligible (get graph u #{}))
             candidate-cycles
-            (for [a neighbors b neighbors :when (< a b)] ; enforcing a < b ensures only one copy of each cycle
+            (for [a neighbors b neighbors :when (< (long a) (long b))] ; enforcing a < b ensures only one copy of each cycle
               (let [pi (compute-pi a) path (trace-path a b pi)]
                 (if (not (nil? path))
                   (concat (list u) path (list u)) nil)))
@@ -88,8 +88,8 @@
     (list cycle)
     (let [n (dec (count cycle))
           dist-cycle (fn [i j]
-                       (let [i (second i)
-                             j (second j)]
+                       (let [i (long (second i))
+                             j (long (second j))]
                          (min (- j i) (+ (- i j) n))))
           dist-euclidean (fn [u v]
                            (let [u (first u)
@@ -104,12 +104,12 @@
                      (cond
                       (nil? u) best ; done
                       (nil? v) (recur (rest U) (rest (rest U)) best best-dist) ; increment
-                      (and (> (dist-cycle u v) 1) (< (dist-euclidean u v) best-dist))
+                      (and (> (long (dist-cycle u v)) 1) (< (double (dist-euclidean u v)) best-dist))
                       (recur U (rest V) (list u v) (double (dist-euclidean u v))) ; uv is a better edge
                       :else (recur U (rest V) best best-dist)))))
             [[_ i] [_ j]] uv
-            cycle-1 (concat (take (+ 1 i) cycle) (drop j cycle))
-            cycle-2 (concat (drop i (take (+ 1 j) cycle)) (list (nth cycle i)))]
+            cycle-1 (concat (take (+ 1 (long i)) cycle) (drop j cycle))
+            cycle-2 (concat (drop i (take (+ 1 (long j)) cycle)) (list (nth cycle i)))]
         (into
          (triangulate-cycle points cycle-1)
          (triangulate-cycle points cycle-2))))))
@@ -117,7 +117,7 @@
 ;; Find holes in the surface.
 (defn- find-holes [surface neighborhood-of & extra]
   (let [edge-counts (frequencies (r/mapcat :boundary surface))
-        half-graph-E (r/map first (filter #(== 1 (val %)) edge-counts)) ; half-edges
+        half-graph-E (r/map first (filter #(== 1 (long (val %))) edge-counts)) ; half-edges
         half-graph (compute-adjlist half-graph-E) ; half-edge graph
         half-graph-V (into [] (r/foldcat (r/flatten (r/map seq half-graph-E)))) ; half-edge graph vertices
         extra (apply hash-map extra)
@@ -145,7 +145,7 @@
      (r/foldcat (r/remove x?# ~surface))))
 
 (defn- remove-suspicious-triangles [surface]
-  (remove-x-triangles surface #(> (val %) 2) #'some))
+  (remove-x-triangles surface #(> (long (val %)) 2) #'some))
 
 ;; Recover a surface from an organized collection of point samples by
 ;; computing a subset of the Delaunay Triangulation (assuming the
