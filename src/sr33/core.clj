@@ -1,12 +1,13 @@
 (ns ^{:author "James McClain <jwm@daystrom-data-concepts.com>"}
-  mst.core
+  sr33.core
   (:require [clojure.java.io :as io]
-            [mst.reconstruct :as recon]
-            [mst.kdtree :as kdtree]
-            [mst.graph_theory :as theory]
-            [mst.file :as file]
-            [mst.grade :as grade])
-  (:use [clojure.tools.nrepl.server :only [start-server stop-server]])
+            [sr33.reconstruct :as recon]
+            [sr33.kdtree :as kdtree]
+            [sr33.graph_theory :as theory]
+            [sr33.file :as file]
+            [sr33.grade :as grade]
+            [clojure.tools.nrepl.server :as nrepl-server]
+            [cider.nrepl :refer (cider-nrepl-handler)])
   (:gen-class))
 
 (defn finished []
@@ -54,5 +55,5 @@
   POSSIBILITY OF SUCH DAMAGE."))
 
 (defn -main []
-  (defonce ^:dynamic *repl-server* (start-server :port 4005))
+  (defonce ^:dynamic *repl-server* (nrepl-server/start-server :port 4005 :handler cider-nrepl-handler))
   (mumbo))

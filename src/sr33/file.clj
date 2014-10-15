@@ -1,9 +1,9 @@
 (ns ^{:author "James McClain <jwm@daystrom-data-concepts.com>"}
-  mst.file
+  sr33.file
   (:require [clojure.set :as set]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [mst.reconstruct :as recon]))
+            [sr33.reconstruct :as recon]))
 
 ;; Squeeze the points down to fit into the box [-1,1]^3.
 (defn boxify [points]

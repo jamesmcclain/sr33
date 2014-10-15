@@ -1,6 +1,6 @@
-(ns mst.core-test
+(ns sr33.core-test
   (:use clojure.test
-        mst.core))
+        sr33.core))
 
 (deftest a-test
   (testing "FIXME, I fail."

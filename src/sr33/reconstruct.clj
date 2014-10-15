@@ -1,10 +1,10 @@
 (ns ^{:author "James McClain <jwm@daystrom-data-concepts.com>"}
-  mst.reconstruct
+  sr33.reconstruct
   (:require [clojure.set :as set]
             [clojure.core.memoize :as memo]
             [clojure.core.reducers :as r]
-            [mst.kdtree :as kdtree]
-            [mst.graph_theory :as theory]))
+            [sr33.kdtree :as kdtree]
+            [sr33.graph_theory :as theory]))
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* true)

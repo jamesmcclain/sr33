@@ -1,9 +1,9 @@
 (ns ^{:author "James McClain <jwm@daystrom-data-concepts.com>"}
-  mst.graph_theory
+  sr33.graph_theory
   (:require [clojure.set :as set]
             [clojure.core.memoize :as memo]
             [clojure.core.reducers :as r]
-            [mst.kdtree :as kdtree])
+            [sr33.kdtree :as kdtree])
   (:use [clojure.data.priority-map]))
 
 (set! *warn-on-reflection* true)
