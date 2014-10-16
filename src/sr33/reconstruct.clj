@@ -27,9 +27,9 @@
 ;; only cycles where all of the indices are smaller than u are
 ;; allowed.
 ;;
-;; The *graph* parameter is the adjacency list in which cycles are
-;; searched-for.  The *metric* parameter is the adjacency list of the
-;; graph in which distances are defined for purposes of finding
+;; The ``graph'' parameter is the adjacency list in which cycles are
+;; searched-for.  The ``metric'' parameter is the adjacency list of
+;; the graph in which distances are defined for purposes of finding
 ;; isometric cycles.  These two might seemingly always be the same,
 ;; but they need to be distinct when looking for non-convex holes.
 (defn- cycles-at-u [graph metric hood u & extra]

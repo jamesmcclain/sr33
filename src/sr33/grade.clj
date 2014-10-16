@@ -4,6 +4,7 @@
             [clojure.java.io :as io]
             [clojure.string :as string]))
 
+;; Print out some statistics concerning the quality of the surface.
 (defn grade-surface [surface]
   (letfn [(triangle-to-edges [tri]
             (let [tri (seq tri)
@@ -21,18 +22,23 @@
       (println "edges:\t\t" (count edges-unique) count-counts)
       (println "faces:\t\t" (count surface)))))
 
-(defn load-surface [filename regexp]
+;; Load a previously-computed surface so that it can be graded.
+(defn load-surface [filename regexp] 
     (with-open [r (io/reader filename)]
-      (letfn [(face? [line] (re-find regexp line))
-              (get-face [face] (map #(Long/parseLong %) (drop 1 (string/split face #"\s+"))))]
+      (letfn [(face? [line] ; the regular expression is used to recognize faces
+                (re-find regexp line))
+              (get-face [face] ; the line is assumed to consist of something followed by three indices
+                (map #(Long/parseLong %) (drop 1 (string/split face #"\s+"))))]
         (loop [lines (line-seq r) surface (list)]
           (cond
            (empty? lines) surface
            (face? (first lines)) (recur (rest lines) (conj surface (get-face (first lines))))
            :else (recur (rest lines) surface))))))
 
+;; Grade a previously-computed surface stored in an .obj file.
 (defn grade-obj [filename]
   (grade-surface (load-surface filename #"^f\s")))
 
+;; Grade a previously-computed surface stored in an .off file.
 (defn grade-off [filename]
   (grade-surface (load-surface filename #"^3\s")))

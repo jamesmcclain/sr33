@@ -39,7 +39,7 @@
               (for [q (neighborhood-of p) :when (and (> (long q) p) (edge? p q))] #{p q}))]
       (r/foldcat (r/mapcat edges-at-p (into [] (range n)))))))
 
-;; CLRS page 595.
+;; Dijkstra's algorithm transliterated from CLRS page 595.
 (defn Dijkstra [adjlist hood s]
   (loop [Q (priority-map s 0) dist (hash-map s 0) pi (hash-map s -1)]
     (let [[u ^long udist] (peek Q)
@@ -47,16 +47,20 @@
           udist (if (nil? udist) (dec Long/MAX_VALUE) udist)
           udist+1 (+ udist 1)]
       (cond
-       (empty? Q) [dist pi] ; done searching, function returns [dist pi]
-       :else ; update Q and dist
+       (empty? Q) [dist pi] ; the queue is empty: done searching, function returns [dist pi]
+       :else ; the queue is not empty: update Q and dist
        (let [[Q dist pi]
-             (loop [Adju (filter hood (get adjlist u #{})) Q (pop Q) dist dist pi pi]
-               (let [v (first Adju)
-                     vdist (long (get dist v Long/MAX_VALUE))]
+             (loop [Adju (filter hood (get adjlist u #{})) ; members of the neighborhood adjacent to u
+                    Q (pop Q) ; remove u from the queue
+                    dist dist ; the distance information
+                    pi pi] ; the previous information
+               (let [v (first Adju) ; v is some neighbor of u
+                     vdist (long (get dist v Long/MAX_VALUE))] ; current best-known distance to v
                  (cond
-                  (or (empty? Adju) (nil? v) (nil? vdist)) [Q dist pi] ; all neighbors checked, done
-                  (> vdist udist+1)
-                  (recur (rest Adju) (assoc Q v udist+1) (assoc dist v udist+1) (assoc pi v u)) ; relax
-                  :else ; next neighbor
-                  (recur (rest Adju) Q dist pi))))]
+                                        ; all neighbors checked, done
+                  (or (empty? Adju) (nil? v) (nil? vdist)) [Q dist pi]
+                                        ; better solution found, relax
+                  (> vdist udist+1) (recur (rest Adju) (assoc Q v udist+1) (assoc dist v udist+1) (assoc pi v u))
+                                        ; solution not any better, continue
+                  :else (recur (rest Adju) Q dist pi))))]
          (recur Q dist pi))))))

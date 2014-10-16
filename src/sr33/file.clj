@@ -5,7 +5,7 @@
             [clojure.string :as string]
             [sr33.reconstruct :as recon]))
 
-;; Squeeze the points down to fit into the box [-1,1]^3.
+;; Squeeze the points down to fit into [-1,1]^3.
 (defn boxify [points]
   (letfn [(column [n ps] (map #(nth % n) ps))]
     (let [x (reduce min (column 0 points))
@@ -62,6 +62,7 @@
       (doseq [face surface]
         (print-face face)))))
 
+;; Save a POV-ray mesh2 object.
 (defn save-povray [points surface name filename]
   (binding [*out* (java.io.FileWriter. filename)]
     (letfn [(print-point [point]
@@ -89,7 +90,7 @@
 
       (println "}"))))
 
-;; Write a neighborhood in DOT format.
+;; Write a neighborhood in DOT format (useful for debugging).
 (defn dotty [edges hood filename]
   (binding [*out* (java.io.FileWriter. filename)]
     (letfn [(in-hood? [edge] (set/subset? edge hood))]
