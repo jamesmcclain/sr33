@@ -5,7 +5,7 @@
 (set! *unchecked-math* true)
 
 ;; Euclidean distance.
-(defn- distance [xyz abc]
+(defn distance [xyz abc]
   (letfn [(square [^double x] (double (* x x)))]
     (Math/sqrt (reduce + (map (comp square -) xyz abc)))))
 
@@ -62,19 +62,19 @@
          (build (map #(list %1 (long %2)) points (range)) 0 min-dim)))) ; give each point an index and build tree
   ;; Takes augmented points, current dimension, and number of
   ;; dimensions.  Returns a kd-tree over the points.
-  ([points ^long d ^long ds]
-     (let [n (count points)]
+  ([aug-points ^long d ^long ds]
+     (let [n (count aug-points)]
        (if (<= n 1)
                                         ; a leaf
          {:type :leaf
-          :xyz (first (first points))
-          :index (second (first points))}
+          :xyz (first (first aug-points))
+          :index (second (first aug-points))}
                                         ; an inner node
          (letfn [(P [x] (nth (first x) d))] ; P is a projection
            (let [next-d (mod (inc d) ds)
-                 points (sort-by P < points)
-                 left (take (/ n 2) points)
-                 right (drop (/ n 2) points)
+                 aug-points (sort-by P < aug-points)
+                 left (take (/ n 2) aug-points)
+                 right (drop (/ n 2) aug-points)
                  split (/ (+ (double (P (last left))) (double (P (first right)))) 2.0)]
              {:type :inner
               :d d :split split

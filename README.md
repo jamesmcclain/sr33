@@ -2,7 +2,7 @@
 
 This is a library/program for reconstructing surfaces from organized collections of point samples, such as those produced by laser range-scanners.
 The ideas behind this program are presented in the
-[article](http://daystrom-data-concepts.com/SR/)
+[article](http://jamesmcclain.info/SR/)
 that accompanies this project.
 
 While the ideas are well-developed, this implementation is somewhat of a prototype:
@@ -51,7 +51,7 @@ The first file contains the reconstruction in Wavefront `.OBJ` format and the se
 `mesh2` object suitable for use with that program.
 
 The meaning of the neighborhood size parameter is explained in the
-[article](http://daystrom-data-concepts.com/SR/).
+[article](http://jamesmcclain.info/SR/).
 In short, it is the number of nearest neighbors around each point to consider when building the graph whose edges bound the faces of the reconstruction.
 The sample conditions for the reconstruction algorithm stipulate that local neighborhoods contain sufficient information to make local operation possible.
 
@@ -113,3 +113,5 @@ as well as some datasets custom generated for this project (which are in the dis
 Copyright © 2014 James McClain
 
 Distributed under the BSD-3 license; see the file COPYING.md in this distribution.
+
+![Hi, there.](http://jamesmcclain.info/SR/hi_there.png)
