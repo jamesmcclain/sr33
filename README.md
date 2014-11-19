@@ -72,7 +72,7 @@ The `core/reconstruct` function can be used to do the entire reconstruction proc
      $ (def points (file/load-obj "/tmp/conebox.obj"))
      $ (def surface (recon/compute-surface points 33))
      $ (file/save-obj points surface "/tmp/conebox-recon.obj")
-     $ (file/save-povray point surface "foot" "/tmp/conebox-recon.inc")
+     $ (file/save-povray point surface "conebox" "/tmp/conebox-recon.inc")
 
 ## Caveats and Bugs
 
